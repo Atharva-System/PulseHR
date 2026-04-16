@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 function roleLabel(role: string) {
-  return role === "higher_authority" ? "Authority" : "HR";
+  return role === "higher_authority" ? "Senior Authority" : "HR Admin";
 }
 
 function roleColor(role: string) {

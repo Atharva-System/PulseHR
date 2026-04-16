@@ -36,9 +36,9 @@ export function RoleBadge({ role }: { role: string }) {
     higher_authority: "bg-purple-100 text-purple-700 border-purple-200",
   };
   const labels: Record<string, string> = {
-    user: "User",
-    hr: "HR",
-    higher_authority: "Authority",
+    user: "Employee",
+    hr: "HR Admin",
+    higher_authority: "Senior Authority",
   };
   return (
     <span

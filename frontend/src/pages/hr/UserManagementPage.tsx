@@ -203,9 +203,9 @@ export default function UserManagementPage() {
           className="rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:border-primary"
         >
           <option value="">All Roles</option>
-          <option value="user">User</option>
-          <option value="hr">HR</option>
-          <option value="higher_authority">Authority</option>
+          <option value="user">Employee</option>
+          <option value="hr">HR Admin</option>
+          <option value="higher_authority">Senior Authority</option>
         </select>
       </div>
 
@@ -407,8 +407,8 @@ export default function UserManagementPage() {
                   }
                   className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  <option value="user">User</option>
-                  <option value="hr">HR</option>
+                  <option value="user">Employee</option>
+                  <option value="hr">HR Admin</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
@@ -518,8 +518,8 @@ export default function UserManagementPage() {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  <option value="user">User</option>
-                  {isAuthority && <option value="hr">HR</option>}
+                  <option value="user">Employee</option>
+                  {isAuthority && <option value="hr">HR Admin</option>}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">

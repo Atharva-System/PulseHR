@@ -118,7 +118,23 @@ export default function ChatPage() {
         className="flex items-center justify-between border-b px-6 py-3 shadow-sm"
         style={{ backgroundColor: "#ffffff", borderColor: "#e2e8f0" }}
       >
-        <AnimatedLogo size="sm" subtitle="AI-powered support" />
+        <div className="flex items-center gap-3">
+          <AnimatedLogo size="sm" />
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide"
+            style={{
+              background: "linear-gradient(135deg, #2563eb18, #7c3aed18)",
+              border: "1px solid #7c3aed44",
+              color: "#7c3aed",
+            }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full animate-pulse"
+              style={{ backgroundColor: "#7c3aed" }}
+            />
+            AI-powered support
+          </span>
+        </div>
         <div className="flex items-center gap-3">
           <Link
             to="/my-tickets"

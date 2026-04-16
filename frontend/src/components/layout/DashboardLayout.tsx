@@ -6,7 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function DashboardLayout() {
   const { user } = useAuth();
   const roleLabel =
-    user?.role === "higher_authority" ? "Authority Panel" : "HR Panel";
+    user?.role === "higher_authority"
+      ? "Senior Authority Panel"
+      : "HR Admin Panel";
 
   return (
     <div
