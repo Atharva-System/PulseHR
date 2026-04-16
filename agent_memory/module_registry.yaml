@@ -1,0 +1,4 @@
+modules:
+  - name: frontend_styling
+    status: complete
+    description: Fix Tailwind CSS v4 CSS priority layout bugs.

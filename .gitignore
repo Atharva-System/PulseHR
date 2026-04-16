@@ -1,0 +1,84 @@
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+
+# Virtual environment
+hr-ai-platform/.venv/
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables — NEVER commit secrets
+hr-ai-platform/.env
+.env
+.env.*
+!.env.example
+
+# ── Node / Frontend ───────────────────────────────────────────────────────
+frontend/node_modules/
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# ── Build outputs ─────────────────────────────────────────────────────────
+*.pyc
+*.pyo
+dist/
+build/
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── Database ──────────────────────────────────────────────────────────────
+*.sqlite3
+*.db
+*.sqlite
+
+# ── OS files ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Testing ───────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── Jupyter ───────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Type stubs ────────────────────────────────────────────────────────────
+*.pyi
+
+# ── Temporary files ───────────────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.bak
