@@ -5,6 +5,7 @@ export interface User {
   full_name: string;
   role: "user" | "hr" | "higher_authority";
   is_active: boolean;
+  receive_notifications: boolean;
   created_by: string | null;
   last_login: string | null;
   previous_login: string | null;

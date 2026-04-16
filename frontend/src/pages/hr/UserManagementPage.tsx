@@ -29,6 +29,7 @@ export default function UserManagementPage() {
     full_name: "",
     password: "",
     role: "user",
+    receive_notifications: false,
   });
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
@@ -39,10 +40,12 @@ export default function UserManagementPage() {
     full_name: string;
     email: string;
     role: "user" | "hr" | "higher_authority";
+    receive_notifications: boolean;
   }>({
     full_name: "",
     email: "",
     role: "user",
+    receive_notifications: false,
   });
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState("");
@@ -88,6 +91,7 @@ export default function UserManagementPage() {
         full_name: "",
         password: "",
         role: "user",
+        receive_notifications: false,
       });
       fetchUsers();
     } catch (err: any) {
@@ -105,6 +109,7 @@ export default function UserManagementPage() {
       full_name: u.full_name || "",
       email: u.email || "",
       role: (u.role as "user" | "hr" | "higher_authority") || "user",
+      receive_notifications: u.receive_notifications || false,
     });
     setEditError("");
   };
@@ -411,6 +416,25 @@ export default function UserManagementPage() {
                   <option value="hr">HR Admin</option>
                 </select>
               </div>
+              {editForm.role === "hr" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notify"
+                    checked={editForm.receive_notifications}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        receive_notifications: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                  />
+                  <label htmlFor="edit-notify" className="text-sm font-medium">
+                    Send ticket notifications via email
+                  </label>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -522,6 +546,28 @@ export default function UserManagementPage() {
                   {isAuthority && <option value="hr">HR Admin</option>}
                 </select>
               </div>
+              {form.role === "hr" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="create-notify"
+                    checked={form.receive_notifications}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        receive_notifications: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                  />
+                  <label
+                    htmlFor="create-notify"
+                    className="text-sm font-medium"
+                  >
+                    Send ticket notifications via email
+                  </label>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"

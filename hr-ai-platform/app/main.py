@@ -5,6 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from app.auth import hash_password
 from app.config import settings
@@ -39,6 +40,17 @@ def create_app() -> FastAPI:
             engine = get_engine()
             Base.metadata.create_all(engine)
             logger.info("Database tables verified / created")
+
+            # Auto-migrate: add new columns to existing tables
+            with engine.connect() as conn:
+                try:
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                        "receive_notifications BOOLEAN DEFAULT FALSE"
+                    ))
+                    conn.commit()
+                except Exception as e:
+                    logger.warning("Column migration skipped: %s", e)
 
             session = get_db_session()
             try:

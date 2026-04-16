@@ -240,22 +240,6 @@ def check_completeness_node(state: HRState) -> dict:
             )
             severity = stored_severity
 
-    # Immediate danger → skip gathering, go straight to ticket
-    if severity == "critical":
-        logger.info(f"[{trace_id}] Critical severity → skipping info gathering")
-        return {
-            "severity": severity,
-            "metadata": {
-                **metadata,
-                "_info_status": "COMPLETE",
-                "_missing_info": [],
-            }
-        }
-
-    # Policy violation OR high severity → fast-track to CONFIRMING on first message
-    is_policy_violation = metadata.get("_policy_violation", False)
-    is_serious = severity in ("high",)  # high but not critical (critical already handled above)
-
     # Count exchanges in history
     is_first_message = not history or history.strip() == ""
     exchange_count = 0
@@ -263,17 +247,6 @@ def check_completeness_node(state: HRState) -> dict:
         exchange_count = history.count("Employee:")
 
     if is_first_message:
-        if is_policy_violation or is_serious:
-            reason = metadata.get("_matched_policy", "") if is_policy_violation else f"high severity ({severity})"
-            logger.info(f"[{trace_id}] Fast-track ({reason}) on first message → CONFIRMING")
-            return {
-                "severity": severity,
-                "metadata": {
-                    **metadata,
-                    "_info_status": "CONFIRMING",
-                    "_missing_info": [],
-                }
-            }
         logger.info(f"[{trace_id}] First message detected → forcing GATHERING")
     else:
         logger.info(f"[{trace_id}] Exchange count: {exchange_count}")
@@ -305,10 +278,13 @@ def check_completeness_node(state: HRState) -> dict:
             }
         }
 
-    # Hard safeguard: after 3+ exchanges, force CONFIRMING (never loop forever)
-    if exchange_count >= 3:
-        logger.info(f"[{trace_id}] {exchange_count} exchanges reached → forcing CONFIRMING")
+    # Hard safeguard: after enough exchanges, force CONFIRMING (never loop forever)
+    # Critical/high severity → faster (2 exchanges), low/medium → 3 exchanges
+    max_exchanges = 2 if severity in ("critical", "high") else 3
+    if exchange_count >= max_exchanges:
+        logger.info(f"[{trace_id}] {exchange_count} exchanges reached (max={max_exchanges}) → forcing CONFIRMING")
         return {
+            "severity": severity,
             "metadata": {
                 **metadata,
                 "_info_status": "CONFIRMING",
@@ -367,6 +343,7 @@ def ask_followup_node(state: HRState) -> dict:
     history = metadata.get("_complaint_history", "")
     message = state.get("message", "")
     missing = metadata.get("_missing_info", [])
+    severity = state.get("severity", "medium")
 
     try:
         llm = get_llm()
@@ -374,6 +351,7 @@ def ask_followup_node(state: HRState) -> dict:
             conversation_history=history if history else "(First message)",
             message=message,
             missing_info=", ".join(missing) if missing else "general details",
+            severity=severity,
         )
         ai_message = llm.invoke(prompt)
         logger.info(f"[{trace_id}] Follow-up generated ({len(ai_message.content)} chars)")

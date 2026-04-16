@@ -33,6 +33,7 @@ class UserModel(Base):
     full_name = Column(String(120), default="")
     role = Column(String(20), nullable=False, default="user")  # user | hr | higher_authority
     is_active = Column(Boolean, default=True, index=True)
+    receive_notifications = Column(Boolean, default=False, index=True)  # ticket email notifications
     created_by = Column(String(36), nullable=True)  # user id who created this account
     last_login = Column(DateTime(timezone=True), nullable=True)  # current login timestamp
     previous_login = Column(DateTime(timezone=True), nullable=True)  # previous login timestamp
@@ -61,6 +62,7 @@ class UserModel(Base):
             "full_name": self.full_name,
             "role": self.role,
             "is_active": self.is_active,
+            "receive_notifications": self.receive_notifications or False,
             "created_by": self.created_by,
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "previous_login": self.previous_login.isoformat() if self.previous_login else None,

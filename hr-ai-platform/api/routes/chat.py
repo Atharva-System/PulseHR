@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends
 from api.schemas.request import ChatRequest
 from api.schemas.response import ChatResponse
 from app.auth import get_optional_user
+from app.dependencies import get_memory_store
 from db.connection import get_db_session
 from db.models import UserModel, ConversationModel
+from memory.schemas import ConversationEntry
 from orchestrator.graph import build_graph
 from orchestrator.state import HRState
 from utils.helpers import generate_trace_id, get_timestamp
@@ -90,12 +92,33 @@ async def chat(
         }
 
         graph = _get_graph()
-        result = await asyncio.to_thread(graph.invoke, initial_state)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(graph.invoke, initial_state),
+            timeout=180,  # 3 minute max for complete graph run
+        )
 
         logger.info(
             f"[{trace_id}] Chat completed — intent={result.get('intent')}, "
             f"agent={result.get('agent_used')}"
         )
+
+        # --- Persist conversation to DB ---
+        try:
+            store = get_memory_store()
+            entry = ConversationEntry(
+                user_id=user_id,
+                message=request.message,
+                response=result.get("response", ""),
+                intent=result.get("intent", ""),
+                emotion=result.get("emotion", ""),
+                severity=result.get("severity", ""),
+                agent_used=result.get("agent_used", ""),
+                trace_id=trace_id,
+                timestamp=timestamp,
+            )
+            store.save_conversation(entry)
+        except Exception as e:
+            logger.warning(f"[{trace_id}] Failed to save conversation: {e}")
 
         return ChatResponse(
             user_id=user_id,
@@ -105,6 +128,15 @@ async def chat(
             agent_used=result.get("agent_used", ""),
             trace_id=trace_id,
             metadata=result.get("metadata", {}),
+        )
+
+    except asyncio.TimeoutError:
+        logger.error(f"[{trace_id}] Chat timed out after 180s")
+        return ChatResponse(
+            user_id=user_id,
+            response="Sorry, the request took too long. The AI model may be under heavy load. Please try again in a moment.",
+            trace_id=trace_id,
+            metadata={"error": "timeout"},
         )
 
     except Exception as e:
