@@ -1,5 +1,0 @@
-   entry_id    | user_id |       intent       |   agent_used    |            timestamp             
----------------+---------+--------------------+-----------------+----------------------------------
- CONV-31f51b9e | EMP001  | employee_complaint | complaint_agent | 2026-04-15 12:41:39.526906+05:30
-(1 row)
-
