@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     smtp_to_hr: str = "hr-team@company.com"
     smtp_to_authority: str = "authority@company.com"
 
+    # Initial admin seed for new databases
+    admin_username: str = "admin"
+    admin_email: str = "admin@company.com"
+    admin_full_name: str = "Administrator"
+    admin_password: str = "admin123"
+    admin_role: str = "higher_authority"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -76,11 +76,7 @@ export default function Sidebar() {
     <aside className="flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
       <div className="border-b border-sidebar-accent px-5 py-4">
-        <AnimatedLogo
-          size="sm"
-          dark
-          subtitle={`${user.role === "higher_authority" ? "Authority" : "HR"} Panel`}
-        />
+        <AnimatedLogo size="sm" dark />
       </div>
 
       {/* Nav */}
