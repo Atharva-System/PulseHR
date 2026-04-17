@@ -8,10 +8,8 @@ from fastapi import APIRouter, Depends
 from api.schemas.request import ChatRequest
 from api.schemas.response import ChatResponse
 from app.auth import get_optional_user
-from app.dependencies import get_memory_store
 from db.connection import get_db_session
 from db.models import UserModel, ConversationModel
-from memory.schemas import ConversationEntry
 from orchestrator.graph import build_graph
 from orchestrator.state import HRState
 from utils.helpers import generate_trace_id, get_timestamp
@@ -101,24 +99,6 @@ async def chat(
             f"[{trace_id}] Chat completed — intent={result.get('intent')}, "
             f"agent={result.get('agent_used')}"
         )
-
-        # --- Persist conversation to DB ---
-        try:
-            store = get_memory_store()
-            entry = ConversationEntry(
-                user_id=user_id,
-                message=request.message,
-                response=result.get("response", ""),
-                intent=result.get("intent", ""),
-                emotion=result.get("emotion", ""),
-                severity=result.get("severity", ""),
-                agent_used=result.get("agent_used", ""),
-                trace_id=trace_id,
-                timestamp=timestamp,
-            )
-            store.save_conversation(entry)
-        except Exception as e:
-            logger.warning(f"[{trace_id}] Failed to save conversation: {e}")
 
         return ChatResponse(
             user_id=user_id,

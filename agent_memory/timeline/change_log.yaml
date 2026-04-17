@@ -1,2 +1,0 @@
-- date: "2026-04-15"
-  description: "Fixed Tailwind CSS v4 specificity bug where unlayered custom CSS un-styled generic components."

@@ -5,7 +5,7 @@ Flow:  START → router → (dispatch) → agent → END
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm
+from app.dependencies import get_llm, get_memory_store
 from orchestrator.state import HRState
 from orchestrator.router import classify_intent
 from orchestrator.dispatcher import dispatch
@@ -14,6 +14,7 @@ from agents.complaint.agent import run_complaint_agent
 from agents.leave.agent import run_leave_agent
 from agents.payroll.agent import run_payroll_agent
 from agents.policy.agent import run_policy_agent
+from memory.schemas import ConversationEntry
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -80,8 +81,26 @@ def run_default_agent(state: HRState) -> dict:
         )
         ai_message = llm.invoke(prompt)
         logger.info(f"[{trace_id}] Default agent completed")
+
+        response_text = ai_message.content
+
+        # Save to memory
+        try:
+            store = get_memory_store()
+            entry = ConversationEntry(
+                user_id=state.get("user_id", "unknown"),
+                message=state.get("message", ""),
+                response=response_text,
+                intent=state.get("intent", "general_query"),
+                agent_used="default_agent",
+                trace_id=trace_id,
+            )
+            store.save_conversation(entry)
+        except Exception as save_err:
+            logger.warning(f"[{trace_id}] Failed to save default agent conversation: {save_err}")
+
         return {
-            "response": ai_message.content,
+            "response": response_text,
             "agent_used": "default_agent",
         }
 
