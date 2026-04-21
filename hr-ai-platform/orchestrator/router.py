@@ -1,17 +1,15 @@
 """Intent router — LLM-based classification of user messages.
 
-Uses a **dedicated low-temperature LLM** for deterministic classification
-and includes few-shot examples so the model reliably distinguishes intents.
+Uses the shared LLM with few-shot examples for reliable intent classification.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+import traceback
 
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.dependencies import get_llm
 from orchestrator.state import HRState
 from utils.logger import get_logger
 
@@ -45,26 +43,6 @@ class IntentClassification(BaseModel):
     confidence: float = Field(
         description="Confidence score between 0.0 and 1.0"
     )
-
-
-# ---------------------------------------------------------------------------
-# Dedicated low-temperature router LLM (singleton)
-# ---------------------------------------------------------------------------
-_router_llm: ChatNVIDIA | None = None
-
-
-def _get_router_llm() -> ChatNVIDIA:
-    """Return a ChatNVIDIA instance tuned for deterministic classification."""
-    global _router_llm
-    if _router_llm is None:
-        _router_llm = ChatNVIDIA(
-            model=settings.model_name,
-            api_key=settings.nvidia_api_key,
-            temperature=0.1,          # near-deterministic for classification
-            top_p=0.9,
-            max_tokens=256,            # classification needs very few tokens
-        )
-    return _router_llm
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +152,9 @@ def classify_intent(state: HRState) -> dict:
     logger.info(f"[{trace_id}] Classifying intent for message: {message[:80]}...")
 
     try:
-        # Use dedicated low-temperature LLM for deterministic classification
-        router_llm = _get_router_llm()
-        structured_llm = router_llm.with_structured_output(IntentClassification)
+        # Use the shared LLM with structured output for classification
+        llm = get_llm()
+        structured_llm = llm.with_structured_output(IntentClassification)
 
         # Build conversation history string for context
         history_parts = []
@@ -255,6 +233,7 @@ def classify_intent(state: HRState) -> dict:
 
     except Exception as e:
         logger.error(f"[{trace_id}] Error in classify_intent: {e}")
+        logger.error(f"[{trace_id}] Traceback: {traceback.format_exc()}")
         return {
             "intent": "general_query",
             "confidence": 0.0,
