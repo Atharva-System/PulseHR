@@ -1,12 +1,32 @@
-"""Intent router — LLM-based classification of user messages."""
+"""Intent router — LLM-based classification of user messages.
 
+Uses a **dedicated low-temperature LLM** for deterministic classification
+and includes few-shot examples so the model reliably distinguishes intents.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from pydantic import BaseModel, Field
 
-from app.dependencies import get_llm
+from app.config import settings
 from orchestrator.state import HRState
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Valid intents (single source of truth)
+# ---------------------------------------------------------------------------
+VALID_INTENTS = {
+    "employee_complaint",
+    "leave_request",
+    "payroll_query",
+    "policy_question",
+    "general_query",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -28,13 +48,90 @@ class IntentClassification(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Prompt
+# Dedicated low-temperature router LLM (singleton)
+# ---------------------------------------------------------------------------
+_router_llm: ChatNVIDIA | None = None
+
+
+def _get_router_llm() -> ChatNVIDIA:
+    """Return a ChatNVIDIA instance tuned for deterministic classification."""
+    global _router_llm
+    if _router_llm is None:
+        _router_llm = ChatNVIDIA(
+            model=settings.model_name,
+            api_key=settings.nvidia_api_key,
+            temperature=0.1,          # near-deterministic for classification
+            top_p=0.9,
+            max_tokens=256,            # classification needs very few tokens
+        )
+    return _router_llm
+
+
+# ---------------------------------------------------------------------------
+# Prompt  (with few-shot examples for reliable classification)
 # ---------------------------------------------------------------------------
 
 INTENT_PROMPT = """\
-You are an HR intent classifier. Analyze the employee's message and determine
-their intent.
+You are an expert HR intent classifier. Your ONLY job is to read the employee's \
+message and return the single best intent category.
 
+=== CATEGORIES ===
+1. employee_complaint  – The employee is filing a complaint, reporting misconduct, \
+harassment, bullying, unfair treatment, discrimination, a hostile work environment, \
+or expressing dissatisfaction about a person/policy/working condition. Also applies \
+when the recent history shows an ongoing complaint conversation and the employee is \
+replying with follow-up details or confirmations.
+2. leave_request       – Anything about applying for leave, checking leave balance, \
+vacation days, sick leave, time off, PTO, FMLA, or absence.
+3. payroll_query       – Anything about salary, payslip, pay stub, deductions, \
+bonuses, compensation, tax, or wages.
+4. policy_question     – The employee is asking about company policies, rules, \
+guidelines, procedures, employee handbook, work-from-home policy, dress code, \
+probation period, notice period, or any official HR policy.
+5. general_query       – Greetings, small talk, thank-you messages, positive \
+feedback about resolved tickets, or anything that does NOT fit categories 1–4.
+
+=== FEW-SHOT EXAMPLES ===
+Employee: "I want to file a complaint against my manager for constant criticism."
+→ intent: employee_complaint, confidence: 0.98
+
+Employee: "What is our leave policy?"
+→ intent: policy_question, confidence: 0.97
+
+Employee: "How many vacation days do I have left?"
+→ intent: leave_request, confidence: 0.96
+
+Employee: "I want to apply for sick leave next Monday."
+→ intent: leave_request, confidence: 0.97
+
+Employee: "Can I see my latest payslip?"
+→ intent: payroll_query, confidence: 0.97
+
+Employee: "What is the work from home policy?"
+→ intent: policy_question, confidence: 0.97
+
+Employee: "What's the company policy on probation period?"
+→ intent: policy_question, confidence: 0.97
+
+Employee: "My manager has been harassing me and I want to report it."
+→ intent: employee_complaint, confidence: 0.99
+
+Employee: "Hello, how are you?"
+→ intent: general_query, confidence: 0.95
+
+Employee: "Thanks, that's helpful!"
+→ intent: general_query, confidence: 0.93
+
+Employee: "What are the working hours policy?"
+→ intent: policy_question, confidence: 0.96
+
+Employee: "How much is my salary this month?"
+→ intent: payroll_query, confidence: 0.96
+
+Employee: "I'd like to take 3 days off next week."
+→ intent: leave_request, confidence: 0.97
+
+=== CONTEXT ===
 RECENT CONVERSATION HISTORY:
 {conversation_history}
 
@@ -44,39 +141,19 @@ TICKET CONTEXT:
 CURRENT EMPLOYEE MESSAGE:
 {message}
 
-Classify into exactly ONE of these categories:
-- employee_complaint: The employee is raising a NEW complaint, reporting an issue, \
-expressing dissatisfaction about a person, policy, or working condition. \
-ALSO use this if the recent history shows an ongoing complaint conversation \
-and the employee is replying with follow-up details, confirmations like \
-"yes", "no", "that's all", "go ahead", etc. \
-ALSO use this if the employee is expressing dissatisfaction with a resolved/closed \
-ticket or saying things are NOT resolved.
-- leave_request: The employee wants to apply for leave, check leave balance, \
-or ask about time off.
-- payroll_query: The employee is asking about salary, payslips, deductions, \
-bonuses, or compensation.
-- policy_question: The employee is asking about company policies, rules, \
-guidelines, or procedures.
-- general_query: Greetings, small talk, positive feedback about resolved tickets, \
-or anything that does not fit the above categories.
-
-IMPORTANT RULES:
-1. If the conversation history shows the employee was recently discussing a \
-complaint and their current message is a short reply or confirmation, \
-classify it as employee_complaint (not general_query).
-2. If the employee has open/in-progress tickets and is asking about the status, \
-classify as general_query (the AI will handle ticket status awareness).
-3. If the employee has a resolved ticket and is saying they are NOT satisfied \
-or the issue is NOT resolved, classify as employee_complaint.
-4. If the employee has a resolved ticket and is saying they ARE satisfied or \
-giving positive feedback, classify as general_query.
-5. CRITICAL: If the last HR Assistant message in the conversation history shows \
-a ticket was ALREADY CREATED (contains phrases like "Complaint Has Been Registered", \
-"Ticket ID:", "TKT-", or a ticket confirmation), the complaint is ALREADY HANDLED. \
-Classify as general_query UNLESS the employee is clearly raising a completely NEW \
-and DIFFERENT complaint topic. Greetings, short replies, or references to the \
-same complaint must be general_query.
+=== RULES ===
+1. If the conversation history shows an ongoing complaint and the employee's \
+current message is a short reply or confirmation, classify as employee_complaint.
+2. If the employee has a resolved ticket and says they are NOT satisfied, \
+classify as employee_complaint.
+3. If the last assistant message shows a ticket was ALREADY CREATED (contains \
+"Complaint Has Been Registered", "Ticket ID:", "TKT-"), classify as general_query \
+UNLESS the employee is raising a completely NEW complaint topic.
+4. When in doubt between policy_question and general_query, prefer policy_question \
+if the message mentions any policy, rule, guideline, or procedure.
+5. When in doubt between leave_request and policy_question for leave-related \
+messages, classify as policy_question if they are asking ABOUT the policy, and \
+leave_request if they want to TAKE leave or CHECK their balance.
 
 Return the intent and your confidence (0.0 – 1.0).
 """
@@ -87,7 +164,7 @@ Return the intent and your confidence (0.0 – 1.0).
 # ---------------------------------------------------------------------------
 
 def classify_intent(state: HRState) -> dict:
-    """Classify the user's intent using an LLM.
+    """Classify the user's intent using a low-temperature LLM.
 
     Returns dict with ``intent`` and ``confidence``.
     """
@@ -96,43 +173,10 @@ def classify_intent(state: HRState) -> dict:
 
     logger.info(f"[{trace_id}] Classifying intent for message: {message[:80]}...")
 
-    # ---------- Programmatic pre-classification for obvious intents ----------
-    # Catch clear complaint keywords before sending to LLM to avoid
-    # misclassification with slower models.
-    msg_lower = message.lower()
-    _complaint_keywords = [
-        "complaint", "harass", "bully", "discriminat", "threaten",
-        "hostile", "abuse", "misconduct", "inappropriate", "unfair",
-        "criticiz", "humiliat", "intimidat", "retaliat", "violat",
-        "file a complaint", "raise a complaint", "lodge a complaint",
-        "report my manager", "report a manager", "toxic",
-    ]
-    # Also check conversation history for ongoing complaint flow
-    last_intent = ""
-    for entry in reversed(state.get("conversation_history", [])):
-        content = entry.get("content", "").lower()
-        content2 = entry.get("content2", "").lower()
-        if "complaint" in content or "complaint" in content2:
-            last_intent = "employee_complaint"
-            break
-
-    if any(kw in msg_lower for kw in _complaint_keywords):
-        logger.info(f"[{trace_id}] Keyword match → employee_complaint (skipping LLM)")
-        return {"intent": "employee_complaint", "confidence": 0.99}
-
-    # If user is continuing an ongoing complaint conversation with a short reply
-    if last_intent == "employee_complaint" and len(message.split()) <= 15:
-        _continuation_words = {
-            "yes", "no", "yeah", "nope", "ok", "okay", "sure", "go ahead",
-            "that's all", "nothing else", "proceed", "file it", "create it",
-        }
-        if msg_lower.strip() in _continuation_words or len(message.split()) <= 5:
-            logger.info(f"[{trace_id}] Complaint continuation → employee_complaint")
-            return {"intent": "employee_complaint", "confidence": 0.95}
-
     try:
-        llm = get_llm()
-        structured_llm = llm.with_structured_output(IntentClassification)
+        # Use dedicated low-temperature LLM for deterministic classification
+        router_llm = _get_router_llm()
+        structured_llm = router_llm.with_structured_output(IntentClassification)
 
         # Build conversation history string for context
         history_parts = []
@@ -191,6 +235,14 @@ def classify_intent(state: HRState) -> dict:
             ticket_context=ticket_str,
         )
         result: IntentClassification = structured_llm.invoke(prompt)
+
+        # Validate the returned intent is one of the known categories
+        if result.intent not in VALID_INTENTS:
+            logger.warning(
+                f"[{trace_id}] LLM returned unknown intent '{result.intent}', "
+                f"falling back to general_query"
+            )
+            return {"intent": "general_query", "confidence": 0.5}
 
         logger.info(
             f"[{trace_id}] Intent detected: {result.intent} "
