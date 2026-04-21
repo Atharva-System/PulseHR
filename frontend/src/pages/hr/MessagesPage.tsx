@@ -11,6 +11,10 @@ import {
   Shield,
   Users,
 } from "lucide-react";
+import {
+  MessageColumnSkeleton,
+  ThreadListSkeleton,
+} from "@/components/shared/Skeleton";
 
 function roleLabel(role: string) {
   return role === "higher_authority" ? "Senior Authority" : "HR Admin";
@@ -213,9 +217,7 @@ export default function MessagesPage() {
         {/* Thread list */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Loading…
-            </p>
+            <ThreadListSkeleton count={7} />
           ) : threads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
               <Users size={32} className="mb-2 text-muted-foreground/40" />
@@ -306,9 +308,7 @@ export default function MessagesPage() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto space-y-3 px-5 py-4">
             {loadingMsgs ? (
-              <p className="text-center text-sm text-muted-foreground">
-                Loading…
-              </p>
+              <MessageColumnSkeleton count={5} />
             ) : messages.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-8">
                 No messages yet. Send the first one!

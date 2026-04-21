@@ -27,6 +27,7 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { DashboardSkeleton } from "@/components/shared/Skeleton";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -47,11 +48,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!summary) return null;

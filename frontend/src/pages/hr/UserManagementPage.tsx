@@ -13,6 +13,7 @@ import {
   Pencil,
   KeyRound,
 } from "lucide-react";
+import { TableRowsSkeleton } from "@/components/shared/Skeleton";
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -217,9 +218,7 @@ export default function UserManagementPage() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-3 border-primary border-t-transparent" />
-          </div>
+          <TableRowsSkeleton columns={isAuthority ? 7 : 6} rows={6} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

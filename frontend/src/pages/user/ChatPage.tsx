@@ -9,13 +9,13 @@ import {
   User,
   Ticket,
   History,
-  Loader2,
   Sparkles,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 import { cn } from "@/lib/utils";
 import { useNavigate, Link } from "react-router-dom";
+import { ChatHistorySkeleton } from "@/components/shared/Skeleton";
 
 /* ------------------------------------------------------------------ */
 /*  Typewriter streaming text — renders words progressively            */
@@ -286,12 +286,7 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {historyLoading && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Loader2 size={24} className="animate-spin text-primary mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Loading chat history…
-              </p>
-            </div>
+            <ChatHistorySkeleton count={4} />
           )}
 
           {!historyLoading && messages.length === 0 && (

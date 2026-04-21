@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import { PolicyListSkeleton } from "@/components/shared/Skeleton";
 
 export default function PolicyManagementPage() {
   const [policies, setPolicies] = useState<Policy[]>([]);
@@ -197,7 +198,7 @@ export default function PolicyManagementPage() {
 
       {/* Policies list */}
       {loading ? (
-        <p className="py-12 text-center text-muted-foreground">Loading…</p>
+        <PolicyListSkeleton />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-input bg-white py-16 text-center">
           <FileText
