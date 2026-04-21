@@ -1,133 +1,236 @@
-# HR AI Platform
+# PulseHR AI
+
+An AI-native HR operations platform that helps employees raise concerns conversationally, routes requests to specialized agents, creates actionable records for HR teams, and gives administrators a structured workspace to manage tickets, policies, users, reports, and internal communication.
+
+## Overview
+
+PulseHR AI combines a modern React frontend with a FastAPI + LangGraph backend to support real HR workflows:
+
+- employees can chat naturally about complaints, leave requests, payroll questions, and policy queries
+- the backend classifies intent and routes each message to a specialized agent
+- multi-turn complaint handling gathers missing details before escalation
+- HR and higher-authority users get dashboards, ticket operations, analytics, conversation review, policy management, and messaging tools
+- the system persists operational data in PostgreSQL and supports email-based escalation flows
 
 This repository contains:
 
 - `frontend/` — React + TypeScript frontend built with Vite
-- `hr-ai-platform/` — FastAPI + SQLAlchemy + LangGraph backend
+- `hr-ai-platform/` — FastAPI backend, LangGraph orchestration, SQLAlchemy models, and APIs
 
-## Deploy On Render
+## Why This Project Exists
 
-This repo works well on Render with three pieces:
+Traditional HR tools are usually form-heavy, fragmented, and hard to use in sensitive moments. PulseHR AI is designed to make HR support feel more conversational for employees while still producing structured, auditable workflows for HR operators.
 
-1. A Render Postgres database
-2. A Render Web Service for the FastAPI backend
-3. A Render Static Site for the Vite frontend
+The product is built around a simple idea:
 
-The frontend currently calls relative paths such as `/api/auth/login`, so the Static Site must include rewrite rules that forward `/api/*` to the backend service.
+- users should be able to describe a problem in plain language
+- the platform should understand intent, gather the right context, and take the next best operational step
+- HR teams should receive organized data, not unstructured chat noise
 
-### 1. Create The Postgres Database
+## Core Capabilities
 
-Create a new Render Postgres instance first.
+### Employee Experience
 
-- Choose the same region as the backend web service
-- Copy the database's internal connection string
-- Use that internal URL as the backend `DATABASE_URL`
+- conversational chat interface for HR support
+- complaint reporting with multi-turn follow-up questions
+- leave balance and leave request assistance
+- payroll query assistance
+- policy question answering grounded in stored policy data
+- ticket tracking for submitted issues
+- post-resolution feedback collection
 
-Example:
+### HR / Admin Experience
 
-```env
-DATABASE_URL=postgresql://user:password@internal-host:5432/intentbot
+- ticket dashboard with severity, SLA, and status visibility
+- detailed ticket workflows with comments and assignment
+- user management for employees, HR admins, and senior authority
+- conversation viewer for historical AI-user chats
+- reporting dashboard with ticket, conversation, and agent analytics
+- policy CRUD and seeding tools
+- internal messaging between HR and higher authority
+- agent activation / deactivation controls
+
+## Product Surfaces
+
+### Employee-facing
+
+- login
+- AI support chat
+- my tickets
+
+### HR-facing
+
+- dashboard
+- tickets list and ticket detail
+- conversations viewer
+- reports
+- policy management
+- users
+- messages
+
+### Higher-authority
+
+- everything HR can access
+- agent management
+- broader user oversight
+
+## Tech Stack
+
+### Frontend
+
+- React 19
+- TypeScript
+- Vite
+- React Router
+- Axios
+- Tailwind CSS v4
+- Recharts
+
+### Backend
+
+- FastAPI
+- Python 3.11+
+- LangGraph
+- LangChain
+- SQLAlchemy
+- Pydantic / pydantic-settings
+- psycopg2
+- JWT authentication
+
+### Infrastructure
+
+- PostgreSQL
+- Render for hosting
+- SMTP for email notifications
+
+### AI / Orchestration
+
+- LLM-based intent routing
+- specialized agents for complaint, leave, payroll, and policy workflows
+- structured-output prompting
+- stateful multi-turn orchestration through LangGraph
+
+## Architecture
+
+```mermaid
+graph TD
+  A[Employee / HR User] -->|Web App| B[React Frontend]
+  B -->|REST API + JWT| C[FastAPI Backend]
+  C --> D[LangGraph Orchestrator]
+  C --> E[PostgreSQL]
+  C --> F[SMTP Notifications]
+
+  D --> G[Intent Router]
+  G --> H[Complaint Agent]
+  G --> I[Leave Agent]
+  G --> J[Payroll Agent]
+  G --> K[Policy Agent]
+  G --> L[Default Agent]
+
+  H --> E
+  I --> E
+  J --> E
+  K --> E
+  L --> E
 ```
 
-## 2. Deploy The Backend
+## Agent Flow
 
-Create a new Render Web Service with these settings:
+### High-Level Routing
 
-| Setting | Value |
-| --- | --- |
-| Service Type | `Web Service` |
-| Runtime | `Python 3` |
-| Root Directory | `hr-ai-platform` |
-| Build Command | `pip install -r requirements.txt` |
-| Start Command | `uvicorn app.main:app --host 0.0.0.0 --port 10000` |
-| Health Check Path | `/health` |
+```mermaid
+flowchart TD
+    A[User sends message] --> B[POST /api/chat]
+    B --> C[Load recent conversation context]
+    C --> D[Intent classifier]
 
-### Backend Environment Variables
+    D -->|employee_complaint| E[Complaint Agent]
+    D -->|leave_request| F[Leave Agent]
+    D -->|payroll_query| G[Payroll Agent]
+    D -->|policy_question| H[Policy Agent]
+    D -->|general_query| I[Default Agent]
 
-Set these in the Render dashboard for the backend service:
+    E --> J[Persist response and ticket updates]
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    J --> K[Return structured chat response]
+```
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | Use the Render Postgres internal URL |
-| `NVIDIA_API_KEY` | Yes | Required by the AI backend |
-| `MODEL_NAME` | Yes | Example: `openai/gpt-oss-120b` |
-| `LOG_LEVEL` | Recommended | Example: `INFO` |
-| `JWT_SECRET_KEY` | Yes | Use a strong production secret |
-| `JWT_ALGORITHM` | Optional | Default is `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Default is `30` |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | Optional | Default is `7` |
-| `SMTP_HOST` | If email is enabled | SMTP server host |
-| `SMTP_PORT` | If email is enabled | Example: `587` |
-| `SMTP_USER` | If email is enabled | SMTP username |
-| `SMTP_PASSWORD` | If email is enabled | SMTP password or app password |
-| `SMTP_FROM` | If email is enabled | Sender email |
-| `SMTP_TO_HR` | Recommended | HR notification address |
-| `SMTP_TO_AUTHORITY` | Recommended | Authority notification address |
-| `ADMIN_USERNAME` | Optional | Seed admin username |
-| `ADMIN_EMAIL` | Optional | Seed admin email |
-| `ADMIN_FULL_NAME` | Optional | Seed admin full name |
-| `ADMIN_PASSWORD` | Recommended | Seed admin password for a fresh DB |
-| `ADMIN_ROLE` | Optional | Default is `higher_authority` |
+### Complaint Agent Flow
 
-### Backend Notes
+The complaint agent is the most operationally rich part of the system. It is designed to behave more like a trained HR intake assistant than a generic chatbot.
 
-- The backend already exposes `GET /health`
-- On first boot with a fresh database, the app auto-creates the seed admin user if the admin env vars are set
-- Keep secrets in Render environment variables, not in git-tracked `.env` files
+```mermaid
+flowchart TD
+    START((Start)) --> CL[Classify complaint type, emotion, severity]
+    CL --> SC[Safety check]
+    SC --> LH[Load complaint history + prior severity]
+    LH --> PC[Policy check]
+    PC --> CC{Information complete?}
 
-## 3. Deploy The Frontend
+    CC -->|No| FU[Ask one targeted follow-up]
+    CC -->|Confirming| CF[Ask final confirmation]
+    CC -->|Yes| GS[Generate professional summary]
 
-Create a new Render Static Site with these settings:
+    FU --> SM[Save memory]
+    CF --> SM
+    GS --> ES[Escalate / create ticket]
+    ES --> ER[Enrich user response]
+    ER --> SM
+    SM --> END((End))
+```
 
-| Setting | Value |
-| --- | --- |
-| Service Type | `Static Site` |
-| Root Directory | `frontend` |
-| Build Command | `npm ci && npm run build` |
-| Publish Directory | `dist` |
+### What the Complaint Agent Collects
 
-No frontend environment variables are required with the current codebase if you add the rewrite rules below.
+- what happened
+- when it happened
+- who was involved
+- whether witnesses or evidence exist
+- how the issue affected the employee
 
-### Frontend Rewrite Rules
+### Escalation Behavior
 
-In the frontend Static Site settings, add these rules in this order:
+- `critical` → notify HR and authority, create ticket
+- `high` → notify HR, create ticket
+- `medium` → create ticket
+- `low` → log / track appropriately
 
-| Source | Destination | Action |
-| --- | --- | --- |
-| `/api/*` | `https://YOUR-BACKEND-SERVICE.onrender.com/api/*` | `Rewrite` |
-| `/health` | `https://YOUR-BACKEND-SERVICE.onrender.com/health` | `Rewrite` |
-| `/*` | `/index.html` | `Rewrite` |
+For a fuller reference, see [hr-ai-platform/AGENT_FLOW.md](/home/vedp/my-project/IntentBot/hr-ai-platform/AGENT_FLOW.md:1).
 
-Why these rules matter:
-
-- `/api/*` forwards API requests from the frontend to the FastAPI backend
-- `/health` matches the local Vite proxy behavior already used in development
-- `/* -> /index.html` makes React Router work on refresh and direct deep links
-
-## 4. Validate The Deployment
-
-After both services are live:
-
-1. Open the backend health URL:
+## Repository Structure
 
 ```text
-https://YOUR-BACKEND-SERVICE.onrender.com/health
+.
+├── frontend/                  # React + TypeScript client
+│   ├── src/
+│   │   ├── api/               # Axios client + API service wrappers
+│   │   ├── components/        # Shared UI, layout, badges, skeletons
+│   │   ├── contexts/          # Auth/session context
+│   │   └── pages/             # Employee, HR, and admin screens
+├── hr-ai-platform/            # FastAPI backend
+│   ├── agents/                # Agent implementations and prompts
+│   ├── api/                   # REST routes and schemas
+│   ├── app/                   # App bootstrap, config, auth, middleware
+│   ├── db/                    # SQLAlchemy models and DB connection
+│   ├── memory/                # Memory store abstractions
+│   ├── orchestrator/          # Shared orchestration state
+│   ├── escalation/            # SLA / escalation logic
+│   └── utils/                 # Logging and support utilities
+└── start.sh                   # Local helper script
 ```
-
-2. Open the frontend site and try logging in
-3. Confirm browser requests to `/api/...` succeed
-4. Confirm the backend can connect to Postgres and create tables on startup
-
-## 5. Recommended Production Cleanup
-
-- Rotate any secrets that were ever stored in local `.env` files
-- Replace the default admin password before real users sign in
-- If you later restrict CORS, update `hr-ai-platform/app/middleware.py` to allow only your frontend domain instead of `*`
-- Add custom domains after the `onrender.com` deployments are working
 
 ## Local Development
 
-### Backend
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- npm
+- PostgreSQL
+
+### Backend Setup
 
 ```bash
 cd hr-ai-platform
@@ -137,7 +240,9 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend
+The backend will be available at `http://localhost:8000`.
+
+### Frontend Setup
 
 ```bash
 cd frontend
@@ -145,19 +250,169 @@ npm install
 npm run dev
 ```
 
-The Vite dev server proxies `/api` and `/health` to `http://localhost:8000`.
+The frontend will be available at `http://localhost:5173`.
 
-### Start Both Together
+### Run Both
 
 ```bash
 ./start.sh
 ```
 
-## Project Structure
+## Configuration
 
-- `frontend/` — Vite frontend
-- `hr-ai-platform/` — FastAPI backend
-- `start.sh` — helper script for local development
+### Backend Environment Variables
+
+Important backend configuration values include:
+
+- `DATABASE_URL`
+- `NVIDIA_API_KEY`
+- `MODEL_NAME`
+- `JWT_SECRET_KEY`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_FROM`
+- `SMTP_TO_HR`
+- `SMTP_TO_AUTHORITY`
+- `ADMIN_USERNAME`
+- `ADMIN_EMAIL`
+- `ADMIN_FULL_NAME`
+- `ADMIN_PASSWORD`
+- `ADMIN_ROLE`
+
+### Frontend Environment Variables
+
+The frontend can call the backend directly using:
+
+```env
+VITE_API_BASE_URL=https://your-backend-service.onrender.com
+```
+
+Example local file:
+
+- [frontend/.env.example](/home/vedp/my-project/IntentBot/frontend/.env.example:1)
+
+## Default Admin Seeding
+
+On first startup against a fresh database, the backend can create an initial admin account using the configured admin environment variables.
+
+Important behavior:
+
+- seeding happens only when an active admin does not already exist
+- changing the default values later does not overwrite an existing admin password
+- production deployments should always replace development defaults
+
+## API Surface
+
+The backend exposes route groups such as:
+
+- `/api/auth`
+- `/api/chat`
+- `/api/users`
+- `/api/tickets`
+- `/api/conversations`
+- `/api/reports`
+- `/api/notifications`
+- `/api/agents`
+- `/api/my`
+- `/api/feedback`
+- `/api/policies`
+- `/api/messages`
+
+Health endpoint:
+
+- `/health`
+
+## Deployment On Render
+
+PulseHR AI fits cleanly into a 3-service Render setup:
+
+1. Render Postgres
+2. Render Web Service for the backend
+3. Render Static Site for the frontend
+
+### 1. Create the Database
+
+Create a Render Postgres instance first and use its internal connection string for the backend `DATABASE_URL`.
+
+Example:
+
+```env
+DATABASE_URL=postgresql://user:password@internal-host:5432/intentbot
+```
+
+### 2. Deploy the Backend
+
+Create a Render Web Service with these settings:
+
+| Setting | Value |
+| --- | --- |
+| Service Type | `Web Service` |
+| Runtime | `Python 3` |
+| Root Directory | `hr-ai-platform` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/health` |
+
+Recommended backend env vars:
+
+- `PYTHON_VERSION=3.11.11`
+- `DATABASE_URL=<render-internal-postgres-url>`
+- `NVIDIA_API_KEY=<your-key>`
+- `MODEL_NAME=openai/gpt-oss-120b`
+- `JWT_SECRET_KEY=<strong-secret>`
+- SMTP and admin seed variables as needed
+
+### 3. Deploy the Frontend
+
+Create a Render Static Site with these settings:
+
+| Setting | Value |
+| --- | --- |
+| Service Type | `Static Site` |
+| Root Directory | `frontend` |
+| Build Command | `npm ci && npm run build` |
+| Publish Directory | `dist` |
+
+Set this env var in the frontend service:
+
+```env
+VITE_API_BASE_URL=https://YOUR-BACKEND-SERVICE.onrender.com
+```
+
+### SPA Routing on Render
+
+If you use static hosting with direct route refreshes, add this rewrite:
+
+| Source | Destination | Action |
+| --- | --- | --- |
+| `/*` | `/index.html` | `Rewrite` |
+
+If you keep the current hash-based router, route refreshes are already safe, but the SPA rewrite is still a reasonable fallback.
+
+## Validation Checklist
+
+After deployment:
+
+1. open the backend health URL
+2. open the frontend login page
+3. verify login requests hit the real backend URL
+4. confirm tickets, reports, and chat routes load correctly
+5. confirm the backend can connect to Postgres and create tables
+
+## Security Notes
+
+- do not commit production secrets
+- rotate any secrets that were ever stored in tracked or shared `.env` files
+- replace default admin credentials before production usage
+- tighten CORS before public production rollout
+- prefer Render-managed environment variables over local config for deployed services
+
+## Documentation References
+
+- [hr-ai-platform/AGENT_FLOW.md](/home/vedp/my-project/IntentBot/hr-ai-platform/AGENT_FLOW.md:1)
+- [hr-ai-platform/README.md](/home/vedp/my-project/IntentBot/hr-ai-platform/README.md:1)
 
 ## Render References
 
