@@ -96,6 +96,40 @@ def classify_intent(state: HRState) -> dict:
 
     logger.info(f"[{trace_id}] Classifying intent for message: {message[:80]}...")
 
+    # ---------- Programmatic pre-classification for obvious intents ----------
+    # Catch clear complaint keywords before sending to LLM to avoid
+    # misclassification with slower models.
+    msg_lower = message.lower()
+    _complaint_keywords = [
+        "complaint", "harass", "bully", "discriminat", "threaten",
+        "hostile", "abuse", "misconduct", "inappropriate", "unfair",
+        "criticiz", "humiliat", "intimidat", "retaliat", "violat",
+        "file a complaint", "raise a complaint", "lodge a complaint",
+        "report my manager", "report a manager", "toxic",
+    ]
+    # Also check conversation history for ongoing complaint flow
+    last_intent = ""
+    for entry in reversed(state.get("conversation_history", [])):
+        content = entry.get("content", "").lower()
+        content2 = entry.get("content2", "").lower()
+        if "complaint" in content or "complaint" in content2:
+            last_intent = "employee_complaint"
+            break
+
+    if any(kw in msg_lower for kw in _complaint_keywords):
+        logger.info(f"[{trace_id}] Keyword match → employee_complaint (skipping LLM)")
+        return {"intent": "employee_complaint", "confidence": 0.99}
+
+    # If user is continuing an ongoing complaint conversation with a short reply
+    if last_intent == "employee_complaint" and len(message.split()) <= 15:
+        _continuation_words = {
+            "yes", "no", "yeah", "nope", "ok", "okay", "sure", "go ahead",
+            "that's all", "nothing else", "proceed", "file it", "create it",
+        }
+        if msg_lower.strip() in _continuation_words or len(message.split()) <= 5:
+            logger.info(f"[{trace_id}] Complaint continuation → employee_complaint")
+            return {"intent": "employee_complaint", "confidence": 0.95}
+
     try:
         llm = get_llm()
         structured_llm = llm.with_structured_output(IntentClassification)

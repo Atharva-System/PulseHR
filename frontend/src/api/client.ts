@@ -7,10 +7,6 @@ const apiBaseUrl =
 const resolveApiUrl = (path: string) =>
   apiBaseUrl === "/" ? path : `${apiBaseUrl}${path}`;
 
-const redirectToLogin = () => {
-  window.location.replace("/#/login");
-};
-
 const api = axios.create({
   baseURL: apiBaseUrl,
   headers: { "Content-Type": "application/json" },
@@ -45,10 +41,10 @@ api.interceptors.response.use(
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
           localStorage.removeItem("user");
-          redirectToLogin();
+          window.location.href = "/login";
         }
       } else {
-        redirectToLogin();
+        window.location.href = "/login";
       }
     }
     return Promise.reject(error);
