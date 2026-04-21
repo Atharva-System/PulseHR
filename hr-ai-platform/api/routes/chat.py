@@ -9,7 +9,7 @@ from api.schemas.request import ChatRequest
 from api.schemas.response import ChatResponse
 from app.auth import get_optional_user
 from db.connection import get_db_session
-from db.models import UserModel, ConversationModel
+from db.models import UserModel, ConversationModel, TicketModel, FeedbackModel
 from orchestrator.graph import build_graph
 from orchestrator.state import HRState
 from utils.helpers import generate_trace_id, get_timestamp
@@ -28,6 +28,83 @@ def _get_graph():
     if _graph is None:
         _graph = build_graph()
     return _graph
+
+
+def _load_ticket_context(user_id: str) -> dict:
+    """Load the user's ticket context for AI awareness.
+
+    Returns a dict with:
+      - open_tickets: list of open/in_progress tickets
+      - resolved_tickets: list of resolved tickets (awaiting feedback)
+      - closed_tickets: list of recently closed tickets with feedback
+      - has_active_tickets: bool
+      - has_unresolved_feedback: bool (resolved but no feedback yet)
+    """
+    session = get_db_session()
+    try:
+        tickets = (
+            session.query(TicketModel)
+            .filter(TicketModel.user_id == user_id)
+            .order_by(TicketModel.created_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        open_tickets = []
+        resolved_tickets = []
+        closed_tickets = []
+
+        for t in tickets:
+            info = {
+                "ticket_id": t.ticket_id,
+                "title": t.title,
+                "severity": t.severity,
+                "status": t.status,
+                "created_at": t.created_at.isoformat() if t.created_at else "",
+            }
+
+            if t.status in ("open", "in_progress"):
+                open_tickets.append(info)
+            elif t.status == "resolved":
+                fb = session.query(FeedbackModel).filter_by(
+                    ticket_id=t.ticket_id, user_id=user_id
+                ).first()
+                info["has_feedback"] = fb is not None
+                if fb:
+                    info["rating"] = fb.rating
+                    info["feedback_comment"] = fb.comment or ""
+                resolved_tickets.append(info)
+            elif t.status == "closed":
+                fb = session.query(FeedbackModel).filter_by(
+                    ticket_id=t.ticket_id, user_id=user_id
+                ).first()
+                info["has_feedback"] = fb is not None
+                if fb:
+                    info["rating"] = fb.rating
+                closed_tickets.append(info)
+
+        has_unresolved = any(
+            not t.get("has_feedback") for t in resolved_tickets
+        )
+
+        return {
+            "open_tickets": open_tickets,
+            "resolved_tickets": resolved_tickets,
+            "closed_tickets": closed_tickets,
+            "has_active_tickets": len(open_tickets) > 0,
+            "has_unresolved_feedback": has_unresolved,
+        }
+    except Exception as e:
+        logger.warning(f"Could not load ticket context: {e}")
+        return {
+            "open_tickets": [],
+            "resolved_tickets": [],
+            "closed_tickets": [],
+            "has_active_tickets": False,
+            "has_unresolved_feedback": False,
+        }
+    finally:
+        session.close()
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -72,6 +149,9 @@ async def chat(
     )
 
     try:
+        # Load ticket context for AI awareness
+        ticket_context = _load_ticket_context(user_id)
+
         initial_state: HRState = {
             "user_id": user_id,
             "message": request.message,
@@ -83,6 +163,7 @@ async def chat(
             "response": "",
             "escalation_action": "",
             "conversation_history": conversation_history,
+            "ticket_context": ticket_context,
             "trace_id": trace_id,
             "timestamp": timestamp,
             "agent_used": "",

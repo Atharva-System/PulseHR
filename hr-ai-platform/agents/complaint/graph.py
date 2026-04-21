@@ -1,9 +1,12 @@
 """Complaint Agent — LangGraph subgraph with conversational info gathering.
 
 Graph flow:
-    classify → safety_check → load_history → check_completeness →
-        if GATHERING: ask_followup → save_to_memory
-        if COMPLETE:  generate_summary → escalate → enrich_response → save_to_memory
+    ticket_check →
+        if DISSATISFIED: handle_dissatisfaction → save_to_memory
+        if NEW_COMPLAINT or NO_TICKETS:
+            classify → safety_check → load_history → check_completeness →
+                if GATHERING: ask_followup → save_to_memory
+                if COMPLETE:  generate_summary → escalate → enrich_response → save_to_memory
 """
 
 from langgraph.graph import StateGraph, START, END
@@ -20,13 +23,20 @@ from agents.complaint.prompts import (
     TICKET_SUMMARY_PROMPT,
     WARM_CLOSING_PROMPT,
     POLICY_VIOLATION_CHECK_PROMPT,
+    DISSATISFACTION_CHECK_PROMPT,
+    DISSATISFACTION_RESPONSE_PROMPT,
 )
-from agents.complaint.schemas import SafetyCheckResult, InfoCompletenessResult, PolicyViolationResult
+from agents.complaint.schemas import (
+    SafetyCheckResult,
+    InfoCompletenessResult,
+    PolicyViolationResult,
+    DissatisfactionCheckResult,
+)
 from agents.policy.tools import search_policies
 from memory.schemas import ConversationEntry
 from orchestrator.state import HRState
 from db.connection import get_db_session
-from db.models import ConversationModel
+from db.models import ConversationModel, TicketModel
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -552,12 +562,220 @@ def save_to_memory_node(state: HRState) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Ticket-aware nodes
+# ---------------------------------------------------------------------------
+
+def ticket_check_node(state: HRState) -> dict:
+    """Node: check if the employee is referring to an existing ticket.
+
+    Determines if this is dissatisfaction with a resolved ticket, or a new complaint.
+    Also guards against duplicate ticket creation when a ticket was just created
+    in the same conversation.
+    """
+    trace_id = state.get("trace_id", "N/A")
+    tc = state.get("ticket_context", {})
+    message = state.get("message", "")
+
+    # ----- Guard: ticket was already created in this conversation -----
+    _ticket_markers = [
+        "Complaint Has Been Registered",
+        "Ticket ID:",
+        "TKT-",
+        "ticket has been registered",
+        "Re-opened & Escalated",
+    ]
+    for entry in reversed(state.get("conversation_history", [])):
+        bot_msg = entry.get("content2", "")
+        if any(m in bot_msg for m in _ticket_markers):
+            logger.info(
+                f"[{trace_id}] Ticket already created in conversation → TICKET_EXISTS"
+            )
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "_ticket_check": "TICKET_EXISTS",
+                },
+                "response": (
+                    "Your complaint has already been registered and our HR team "
+                    "is actively looking into it. You can track your ticket status "
+                    "anytime from the **My Tickets** page.\n\n"
+                    "Is there anything else I can help you with?"
+                ),
+                "agent_used": "complaint_agent",
+            }
+
+    # If no tickets exist at all, skip straight to normal complaint flow
+    has_any_tickets = (
+        tc.get("open_tickets")
+        or tc.get("resolved_tickets")
+        or tc.get("closed_tickets")
+    )
+    if not has_any_tickets:
+        logger.info(f"[{trace_id}] No tickets found → normal complaint flow")
+        return {"metadata": {**state.get("metadata", {}), "_ticket_check": "NEW_COMPLAINT"}}
+
+    logger.info(f"[{trace_id}] Checking ticket context for dissatisfaction")
+
+    try:
+        llm = get_llm()
+        structured_llm = llm.with_structured_output(DissatisfactionCheckResult)
+
+        # Build ticket context string
+        ticket_parts = []
+        for t in tc.get("open_tickets", []):
+            ticket_parts.append(f"- OPEN: {t['ticket_id']} — {t.get('title','')}")
+        for t in tc.get("resolved_tickets", []):
+            fb = f", feedback: {t.get('rating','')}/5" if t.get("rating") else ", no feedback"
+            ticket_parts.append(f"- RESOLVED: {t['ticket_id']} — {t.get('title','')}{fb}")
+        for t in tc.get("closed_tickets", []):
+            fb = f", rating: {t.get('rating','')}/5" if t.get("rating") else ""
+            ticket_parts.append(f"- CLOSED: {t['ticket_id']} — {t.get('title','')}{fb}")
+        ticket_str = "\n".join(ticket_parts)
+
+        # Build conversation history
+        history_parts = []
+        for entry in state.get("conversation_history", []):
+            history_parts.append(f"Employee: {entry.get('content', '')}")
+            history_parts.append(f"HR Assistant: {entry.get('content2', '')}")
+        history_str = "\n".join(history_parts) if history_parts else "(No history)"
+
+        prompt = DISSATISFACTION_CHECK_PROMPT.format(
+            ticket_context=ticket_str,
+            conversation_history=history_str,
+            message=message,
+        )
+        result: DissatisfactionCheckResult = structured_llm.invoke(prompt)
+        logger.info(
+            f"[{trace_id}] Ticket check: dissatisfied={result.is_dissatisfied}, "
+            f"new_complaint={result.is_new_complaint}, ticket={result.related_ticket_id}"
+        )
+
+        metadata = state.get("metadata", {})
+
+        if result.is_dissatisfied and result.related_ticket_id:
+            metadata["_ticket_check"] = "DISSATISFIED"
+            metadata["_dissatisfied_ticket_id"] = result.related_ticket_id
+            return {"metadata": metadata}
+
+        metadata["_ticket_check"] = "NEW_COMPLAINT"
+        return {"metadata": metadata}
+
+    except Exception as e:
+        logger.error(f"[{trace_id}] Error in ticket_check_node: {e}")
+        return {"metadata": {**state.get("metadata", {}), "_ticket_check": "NEW_COMPLAINT"}}
+
+
+def handle_dissatisfaction_node(state: HRState) -> dict:
+    """Node: handle employee dissatisfaction with a resolved/closed ticket.
+
+    - Generates an empathetic response
+    - Re-opens the ticket
+    - Escalates to higher authority via email
+    """
+    trace_id = state.get("trace_id", "N/A")
+    metadata = state.get("metadata", {})
+    ticket_id = metadata.get("_dissatisfied_ticket_id", "")
+    message = state.get("message", "")
+    user_id = state.get("user_id", "unknown")
+
+    logger.info(f"[{trace_id}] Handling dissatisfaction for ticket {ticket_id}")
+
+    # Load ticket details and re-open
+    ticket_title = ""
+    ticket_status = ""
+    ticket_severity = ""
+    if ticket_id:
+        session = get_db_session()
+        try:
+            ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
+            if ticket:
+                ticket_title = ticket.title or ""
+                ticket_status = ticket.status or ""
+                ticket_severity = ticket.severity or "medium"
+
+                # Re-open the ticket
+                ticket.status = "open"
+                session.commit()
+                logger.info(f"[{trace_id}] Ticket {ticket_id} re-opened due to dissatisfaction")
+        except Exception as e:
+            logger.error(f"[{trace_id}] Error re-opening ticket: {e}")
+        finally:
+            session.close()
+
+    # Generate empathetic response via LLM
+    try:
+        llm = get_llm()
+        prompt = DISSATISFACTION_RESPONSE_PROMPT.format(
+            ticket_id=ticket_id,
+            ticket_title=ticket_title,
+            ticket_status=ticket_status,
+            message=message,
+        )
+        ai_message = llm.invoke(prompt)
+        response_text = ai_message.content
+    except Exception as e:
+        logger.error(f"[{trace_id}] Error generating dissatisfaction response: {e}")
+        response_text = (
+            "I understand your concern, and I'm sorry to hear the issue wasn't resolved "
+            "to your satisfaction. I'm escalating this to senior management right away "
+            "for a thorough review. Could you tell me what specifically hasn't been addressed?"
+        )
+
+    # Append re-escalation notice
+    severity_emoji = {"low": "🟢", "medium": "🟡", "high": "🟠", "critical": "🔴"}.get(
+        ticket_severity, "🟡"
+    )
+    response_text += (
+        f"\n\n---\n\n"
+        f"### 🔄 Ticket Re-opened & Escalated\n\n"
+        f"**Ticket ID:** `{ticket_id}`\n\n"
+        f"**Priority:** {severity_emoji} {ticket_severity.upper()}\n\n"
+        f"**Status:** 🔵 Re-opened\n\n"
+        f"> ⬆️ *This has been escalated to senior management for immediate review. "
+        f"You will be contacted directly.*"
+    )
+
+    # Email higher authority about dissatisfaction
+    try:
+        from escalation.notifier import notify_authority
+        notify_authority(
+            f"DISSATISFACTION RE-ESCALATION — Ticket {ticket_id}\n\n"
+            f"Employee ({user_id}) is dissatisfied with the resolution of ticket {ticket_id}.\n"
+            f"Original complaint: {ticket_title}\n"
+            f"Employee's message: {message}\n\n"
+            f"The ticket has been re-opened automatically. Please review urgently.",
+            severity=ticket_severity or "high",
+        )
+        logger.info(f"[{trace_id}] Dissatisfaction escalation email sent to authority")
+    except Exception as e:
+        logger.error(f"[{trace_id}] Failed to send dissatisfaction escalation email: {e}")
+
+    return {
+        "response": response_text,
+        "agent_used": "complaint_agent",
+        "escalation_action": "notify_authority",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Conditional edges
 # ---------------------------------------------------------------------------
 
 def route_after_safety(state: HRState) -> str:
     """After safety check, load history."""
     return "load_history"
+
+
+def route_after_ticket_check(state: HRState) -> str:
+    """After ticket check, either handle dissatisfaction, exit early, or proceed."""
+    metadata = state.get("metadata", {})
+    check_result = metadata.get("_ticket_check", "NEW_COMPLAINT")
+
+    if check_result == "TICKET_EXISTS":
+        return "save_to_memory"
+    if check_result == "DISSATISFIED":
+        return "handle_dissatisfaction"
+    return "classify"
 
 
 def route_after_completeness(state: HRState) -> str:
@@ -580,6 +798,11 @@ def build_complaint_graph() -> StateGraph:
     """Construct and compile the Complaint Agent subgraph."""
     graph = StateGraph(HRState)
 
+    # Ticket-aware nodes
+    graph.add_node("ticket_check", ticket_check_node)
+    graph.add_node("handle_dissatisfaction", handle_dissatisfaction_node)
+
+    # Original nodes
     graph.add_node("classify", classify_node)
     graph.add_node("safety_check", safety_check_node)
     graph.add_node("load_history", load_history_node)
@@ -593,7 +816,14 @@ def build_complaint_graph() -> StateGraph:
     graph.add_node("enrich_response", enrich_response_node)
     graph.add_node("save_to_memory", save_to_memory_node)
 
-    graph.add_edge(START, "classify")
+    # --- Entry: ticket check first ---
+    graph.add_edge(START, "ticket_check")
+    graph.add_conditional_edges("ticket_check", route_after_ticket_check)
+
+    # Dissatisfaction path → save → end
+    graph.add_edge("handle_dissatisfaction", "save_to_memory")
+
+    # Normal complaint flow
     graph.add_edge("classify", "safety_check")
     graph.add_conditional_edges("safety_check", route_after_safety)
     graph.add_edge("load_history", "policy_check")

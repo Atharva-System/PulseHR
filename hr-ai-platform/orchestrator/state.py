@@ -30,6 +30,9 @@ class HRState(TypedDict, total=False):
     # --- Conversation context ---
     conversation_history: list[dict]
 
+    # --- Ticket awareness ---
+    ticket_context: dict
+
     # --- Metadata & tracing ---
     trace_id: str
     timestamp: str

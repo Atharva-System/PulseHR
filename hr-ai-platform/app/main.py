@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
                             password_hash=hash_password(settings.admin_password),
                             role=settings.admin_role,
                             is_active=True,
+                            receive_notifications=True,
                         )
                         session.add(new_admin)
                         session.commit()

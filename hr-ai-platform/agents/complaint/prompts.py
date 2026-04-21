@@ -200,6 +200,58 @@ Write it in third person (e.g., "The employee reports that...").
 Keep it factual and professional. 2–4 sentences max.
 """
 
+# ---------------------------------------------------------------------------
+# Dissatisfaction detection — for ticket-aware complaint handling
+# ---------------------------------------------------------------------------
+
+DISSATISFACTION_CHECK_PROMPT = """\
+You are an HR analyst checking whether an employee is dissatisfied with the
+resolution of an existing ticket, or raising a completely new complaint.
+
+EMPLOYEE'S EXISTING TICKETS:
+{ticket_context}
+
+CONVERSATION HISTORY:
+{conversation_history}
+
+CURRENT EMPLOYEE MESSAGE:
+{message}
+
+INSTRUCTIONS:
+1. If the employee is expressing frustration, disappointment, or dissatisfaction
+   about a PREVIOUSLY RESOLVED or CLOSED ticket → is_dissatisfied = true and
+   set related_ticket_id to the matching ticket.
+2. If the employee says the issue is NOT resolved, things haven't changed,
+   or they're still experiencing the same problem → is_dissatisfied = true.
+3. Detect sarcasm — "oh great, nothing changed" means dissatisfied.
+4. If the employee is clearly raising a BRAND NEW, DIFFERENT topic → is_new_complaint = true.
+5. If it's a greeting or general chat → is_dissatisfied = false, is_new_complaint = false.
+
+Return JSON with:
+- is_dissatisfied: bool
+- related_ticket_id: string (empty if not applicable)
+- reasoning: brief explanation
+- is_new_complaint: bool
+"""
+
+DISSATISFACTION_RESPONSE_PROMPT = """\
+You are an empathetic HR assistant. The employee has expressed dissatisfaction
+with the resolution of their previous complaint.
+
+TICKET ID: {ticket_id}
+ORIGINAL COMPLAINT: {ticket_title}
+PREVIOUS STATUS: {ticket_status}
+EMPLOYEE'S MESSAGE: {message}
+
+RULES:
+1. Acknowledge their frustration sincerely — they clearly feel unheard.
+2. Apologize that the resolution wasn't satisfactory.
+3. Assure them you are escalating this to senior management for immediate review.
+4. Ask them what specifically hasn't been addressed so senior management has context.
+5. Keep it to 3-4 sentences. Be warm, genuine, not corporate.
+6. Do NOT mention "ticket", "case number", or "re-opening" — that's shown separately.
+"""
+
 WARM_CLOSING_PROMPT = """\
 You are an HR assistant. A complaint ticket has just been created for the employee.
 

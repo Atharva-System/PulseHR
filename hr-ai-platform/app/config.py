@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Initial admin seed for new databases
     admin_username: str = "admin"
-    admin_email: str = "admin@company.com"
+    admin_email: str = "admin@yopmail.com"
     admin_full_name: str = "Administrator"
     admin_password: str = "admin123"
     admin_role: str = "higher_authority"
