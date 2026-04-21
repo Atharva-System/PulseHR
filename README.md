@@ -23,9 +23,9 @@ Traditional HR tools are usually form-heavy, fragmented, and hard to use in sens
 
 The product is built around a simple idea:
 
-- users should be able to describe a problem in plain language
-- the platform should understand intent, gather the right context, and take the next best operational step
-- HR teams should receive organized data, not unstructured chat noise
+- **users should be able to describe a problem in plain language**
+- **the platform should understand intent, gather the right context, and take the next best operational step**
+- **HR teams should receive organized data, not unstructured chat noise**
 
 ## Core Capabilities
 
