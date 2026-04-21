@@ -74,6 +74,29 @@ async def submit_feedback(
         session.commit()
 
         logger.info(f"Feedback submitted: ticket={body.ticket_id} rating={body.rating} by {current_user.username}")
+
+        # --- Bad review escalation: rating ≤ 2 → re-open ticket + notify authority ---
+        if body.rating <= 2:
+            try:
+                ticket.status = "open"
+                session.commit()
+                logger.info(f"Bad review: ticket {body.ticket_id} re-opened (rating={body.rating})")
+
+                from escalation.notifier import notify_authority
+                employee_name = current_user.full_name or current_user.username
+                notify_authority(
+                    f"BAD REVIEW ESCALATION — Ticket {body.ticket_id}\n\n"
+                    f"Employee: {employee_name}\n"
+                    f"Ticket: {body.ticket_id} — {ticket.title}\n"
+                    f"Rating: {body.rating}/5\n"
+                    f"Comment: {body.comment or '(no comment)'}\n\n"
+                    f"The ticket has been re-opened automatically. Please review.",
+                    severity=ticket.severity or "high",
+                )
+                logger.info(f"Bad review escalation email sent for ticket {body.ticket_id}")
+            except Exception as esc_err:
+                logger.error(f"Bad review escalation failed: {esc_err}")
+
         return FeedbackResponse(
             id=fb.id,
             ticket_id=fb.ticket_id,

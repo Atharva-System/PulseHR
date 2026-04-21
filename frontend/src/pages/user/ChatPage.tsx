@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { chatApi, myApi } from "@/api/services";
 import type { ChatMessage } from "@/types";
@@ -9,12 +9,135 @@ import {
   User,
   Ticket,
   History,
-  Loader2,
+  Sparkles,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 import { cn } from "@/lib/utils";
 import { useNavigate, Link } from "react-router-dom";
+import { ChatHistorySkeleton } from "@/components/shared/Skeleton";
+
+/* ------------------------------------------------------------------ */
+/*  Typewriter streaming text — renders words progressively            */
+/* ------------------------------------------------------------------ */
+const WORDS_PER_TICK = 3; // words revealed per interval
+const TICK_MS = 40; // milliseconds between reveals
+
+function StreamingText({
+  content,
+  onDone,
+}: {
+  content: string;
+  onDone: () => void;
+}) {
+  const words = useMemo(() => content.split(/(\s+)/), [content]); // preserve whitespace
+  const [visibleCount, setVisibleCount] = useState(0);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (visibleCount >= words.length) {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        onDone();
+      }
+      return;
+    }
+    const id = setTimeout(
+      () => setVisibleCount((c) => Math.min(c + WORDS_PER_TICK, words.length)),
+      TICK_MS,
+    );
+    return () => clearTimeout(id);
+  }, [visibleCount, words.length, onDone]);
+
+  const partial = words.slice(0, visibleCount).join("");
+
+  return (
+    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-blockquote:my-2 prose-hr:my-3 prose-table:my-2 prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5 prose-th:bg-gray-50 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-medium prose-blockquote:border-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:rounded-r-lg prose-blockquote:py-1 prose-blockquote:px-3 prose-strong:text-gray-900">
+      <Markdown>{partial}</Markdown>
+      {visibleCount < words.length && (
+        <span className="inline-block w-[6px] h-[14px] bg-primary/60 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Claude-style thinking loader                                       */
+/* ------------------------------------------------------------------ */
+const THINKING_MESSAGES = [
+  "Understanding your message…",
+  "Classifying intent…",
+  "Routing to the right agent…",
+  "Agent is analyzing your request…",
+  "Looking up relevant information…",
+  "Preparing response…",
+  "Almost there…",
+];
+
+function ThinkingLoader() {
+  const [idx, setIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Cycle messages: fast at first, slower later
+    const delay = idx < 2 ? 2500 : 4000;
+    const id = setTimeout(
+      () => setIdx((i) => (i + 1) % THINKING_MESSAGES.length),
+      delay,
+    );
+    return () => clearTimeout(id);
+  }, [idx]);
+
+  return (
+    <div className="flex gap-3 items-start">
+      {/* Avatar */}
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Bot size={16} className="text-primary" />
+      </div>
+
+      {/* Bubble */}
+      <div className="rounded-2xl rounded-bl-md border border-border bg-white px-4 py-3 shadow-sm min-w-[220px] max-w-xs">
+        {/* Shimmer bar */}
+        <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-muted/50">
+          <div
+            className="h-full rounded-full"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, #6366f1, transparent)",
+              animation: "shimmer 1.8s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        {/* Rotating message */}
+        <div className="flex items-center gap-2">
+          <Sparkles
+            size={14}
+            className="shrink-0 text-indigo-500 animate-pulse"
+          />
+          <span
+            key={idx}
+            className="text-sm text-muted-foreground animate-fade-in"
+          >
+            {THINKING_MESSAGES[idx]}
+          </span>
+        </div>
+
+        {/* Elapsed timer */}
+        {elapsed >= 5 && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground/60">
+            {elapsed}s — this model can be slow, hang tight
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ChatPage() {
   const { user, logout } = useAuth();
@@ -23,6 +146,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Load chat history on mount
@@ -61,7 +185,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingMsgId]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -79,8 +203,9 @@ export default function ChatPage() {
 
     try {
       const { data } = await chatApi.send(text);
+      const botId = Date.now().toString() + "-bot";
       const botMsg: ChatMessage = {
-        id: Date.now().toString() + "-bot",
+        id: botId,
         role: "assistant",
         content: data.response,
         intent: data.intent,
@@ -88,6 +213,7 @@ export default function ChatPage() {
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, botMsg]);
+      setStreamingMsgId(botId); // triggers typewriter on this message
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -118,7 +244,23 @@ export default function ChatPage() {
         className="flex items-center justify-between border-b px-6 py-3 shadow-sm"
         style={{ backgroundColor: "#ffffff", borderColor: "#e2e8f0" }}
       >
-        <AnimatedLogo size="sm" subtitle="AI-powered support" />
+        <div className="flex items-center gap-3">
+          <AnimatedLogo size="sm" />
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide"
+            style={{
+              background: "linear-gradient(135deg, #2563eb18, #7c3aed18)",
+              border: "1px solid #7c3aed44",
+              color: "#7c3aed",
+            }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full animate-pulse"
+              style={{ backgroundColor: "#7c3aed" }}
+            />
+            AI-powered support
+          </span>
+        </div>
         <div className="flex items-center gap-3">
           <Link
             to="/my-tickets"
@@ -144,12 +286,7 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {historyLoading && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Loader2 size={24} className="animate-spin text-primary mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Loading chat history…
-              </p>
-            </div>
+            <ChatHistorySkeleton count={4} />
           )}
 
           {!historyLoading && messages.length === 0 && (
@@ -207,9 +344,16 @@ export default function ChatPage() {
                 )}
               >
                 {msg.role === "assistant" ? (
-                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-blockquote:my-2 prose-hr:my-3 prose-table:my-2 prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5 prose-th:bg-gray-50 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-medium prose-blockquote:border-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:rounded-r-lg prose-blockquote:py-1 prose-blockquote:px-3 prose-strong:text-gray-900">
-                    <Markdown>{msg.content}</Markdown>
-                  </div>
+                  streamingMsgId === msg.id ? (
+                    <StreamingText
+                      content={msg.content}
+                      onDone={() => setStreamingMsgId(null)}
+                    />
+                  ) : (
+                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-blockquote:my-2 prose-hr:my-3 prose-table:my-2 prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5 prose-th:bg-gray-50 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-medium prose-blockquote:border-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:rounded-r-lg prose-blockquote:py-1 prose-blockquote:px-3 prose-strong:text-gray-900">
+                      <Markdown>{msg.content}</Markdown>
+                    </div>
+                  )
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 )}
@@ -234,20 +378,7 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {loading && (
-            <div className="flex gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Bot size={16} className="text-primary" />
-              </div>
-              <div className="rounded-2xl rounded-bl-md border border-border bg-white px-4 py-3 shadow-sm">
-                <div className="flex gap-1.5">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:0ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:150ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:300ms]" />
-                </div>
-              </div>
-            </div>
-          )}
+          {loading && <ThinkingLoader />}
           <div ref={bottomRef} />
         </div>
       </div>

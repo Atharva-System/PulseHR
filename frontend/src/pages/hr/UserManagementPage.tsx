@@ -13,6 +13,7 @@ import {
   Pencil,
   KeyRound,
 } from "lucide-react";
+import { TableRowsSkeleton } from "@/components/shared/Skeleton";
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -29,6 +30,7 @@ export default function UserManagementPage() {
     full_name: "",
     password: "",
     role: "user",
+    receive_notifications: false,
   });
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
@@ -39,10 +41,12 @@ export default function UserManagementPage() {
     full_name: string;
     email: string;
     role: "user" | "hr" | "higher_authority";
+    receive_notifications: boolean;
   }>({
     full_name: "",
     email: "",
     role: "user",
+    receive_notifications: false,
   });
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState("");
@@ -88,6 +92,7 @@ export default function UserManagementPage() {
         full_name: "",
         password: "",
         role: "user",
+        receive_notifications: false,
       });
       fetchUsers();
     } catch (err: any) {
@@ -105,6 +110,7 @@ export default function UserManagementPage() {
       full_name: u.full_name || "",
       email: u.email || "",
       role: (u.role as "user" | "hr" | "higher_authority") || "user",
+      receive_notifications: u.receive_notifications || false,
     });
     setEditError("");
   };
@@ -203,18 +209,16 @@ export default function UserManagementPage() {
           className="rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:border-primary"
         >
           <option value="">All Roles</option>
-          <option value="user">User</option>
-          <option value="hr">HR</option>
-          <option value="higher_authority">Authority</option>
+          <option value="user">Employee</option>
+          <option value="hr">HR Admin</option>
+          <option value="higher_authority">Senior Authority</option>
         </select>
       </div>
 
       {/* Table */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-3 border-primary border-t-transparent" />
-          </div>
+          <TableRowsSkeleton columns={isAuthority ? 7 : 6} rows={6} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -407,10 +411,29 @@ export default function UserManagementPage() {
                   }
                   className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  <option value="user">User</option>
-                  <option value="hr">HR</option>
+                  <option value="user">Employee</option>
+                  <option value="hr">HR Admin</option>
                 </select>
               </div>
+              {editForm.role === "hr" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notify"
+                    checked={editForm.receive_notifications}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        receive_notifications: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                  />
+                  <label htmlFor="edit-notify" className="text-sm font-medium">
+                    Send ticket notifications via email
+                  </label>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -518,10 +541,32 @@ export default function UserManagementPage() {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  <option value="user">User</option>
-                  {isAuthority && <option value="hr">HR</option>}
+                  <option value="user">Employee</option>
+                  {isAuthority && <option value="hr">HR Admin</option>}
                 </select>
               </div>
+              {form.role === "hr" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="create-notify"
+                    checked={form.receive_notifications}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        receive_notifications: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                  />
+                  <label
+                    htmlFor="create-notify"
+                    className="text-sm font-medium"
+                  >
+                    Send ticket notifications via email
+                  </label>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"

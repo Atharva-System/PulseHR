@@ -26,6 +26,7 @@ class CreateUserRequest(BaseModel):
     full_name: str = Field("", max_length=120)
     password: str = Field(..., min_length=4)
     role: str = Field("user", pattern="^(user|hr|higher_authority)$")
+    receive_notifications: bool = False
 
 
 class UpdateUserRequest(BaseModel):
@@ -33,6 +34,7 @@ class UpdateUserRequest(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = Field(None, pattern="^(user|hr|higher_authority)$")
+    receive_notifications: Optional[bool] = None
 
 
 class UserResponse(BaseModel):
@@ -42,6 +44,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    receive_notifications: bool = False
     created_by: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -98,6 +101,7 @@ async def create_user(
             password_hash=hash_password(body.password),
             role=body.role,
             is_active=True,
+            receive_notifications=body.receive_notifications,
             created_by=current_user.id,
         )
         session.add(user)
@@ -173,6 +177,8 @@ async def update_user(
             if body.role == "higher_authority":
                 raise HTTPException(status_code=403, detail="Cannot assign higher_authority role")
             user.role = body.role
+        if body.receive_notifications is not None:
+            user.receive_notifications = body.receive_notifications
 
         session.commit()
         session.refresh(user)

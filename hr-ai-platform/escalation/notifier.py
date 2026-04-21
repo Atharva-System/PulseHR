@@ -1,12 +1,43 @@
 """Escalation: notify HR personnel of urgent matters via SMTP email."""
 
 from datetime import datetime, timezone
+from typing import List
 
 from app.config import settings
+from db.connection import get_db_session
+from db.models import UserModel
 from skills.communication.email import send_email
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _get_notification_recipients(role: str = "hr") -> List[str]:
+    """Return email addresses of active users with receive_notifications enabled.
+
+    Falls back to the SMTP_TO_HR / SMTP_TO_AUTHORITY env setting if no
+    users are found in the database.
+    """
+    session = get_db_session()
+    try:
+        users = (
+            session.query(UserModel)
+            .filter(
+                UserModel.role == role,
+                UserModel.is_active == True,
+                UserModel.receive_notifications == True,
+            )
+            .all()
+        )
+        emails = [u.email for u in users if u.email]
+        if emails:
+            return emails
+    finally:
+        session.close()
+
+    # Fallback to env setting
+    fallback = settings.smtp_to_hr if role == "hr" else settings.smtp_to_authority
+    return [fallback] if fallback else []
 
 
 def _build_html_email(complaint_summary: str, severity: str) -> str:
@@ -92,28 +123,46 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
 def notify_hr(complaint_summary: str, severity: str) -> dict:
     """Alert HR team about a complaint that requires immediate attention.
 
-    Sends a professional HTML email via SMTP to the configured HR recipient.
+    Sends a professional HTML email via SMTP to all HR users with
+    receive_notifications enabled. Falls back to SMTP_TO_HR env value.
     """
     subject = f"⚠️ HR Alert — {severity.upper()} Severity Complaint Reported"
     body = _build_html_email(complaint_summary, severity)
 
-    recipient = settings.smtp_to_hr
-    logger.info(f"Notifying HR ({recipient}) — severity={severity}")
+    recipients = _get_notification_recipients(role="hr")
+    if not recipients:
+        logger.warning("No HR notification recipients found — skipping email")
+        return {"status": "skipped", "reason": "no recipients"}
 
-    result = send_email(to=recipient, subject=subject, body=body, html=True)
-    return result
+    logger.info(f"Notifying HR ({', '.join(recipients)}) — severity={severity}")
+
+    results = []
+    for recipient in recipients:
+        results.append(send_email(to=recipient, subject=subject, body=body, html=True))
+    return {"status": "sent", "recipients": recipients, "results": results}
 
 
 def notify_authority(complaint_summary: str, severity: str) -> dict:
     """Alert Higher Authority about a critical/high SLA breach.
 
-    Sends the same professional HTML email to the authority recipient.
+    Sends the same professional HTML email to all higher_authority users
+    with receive_notifications enabled. Falls back to SMTP_TO_AUTHORITY env.
     """
     subject = f"🚨 ESCALATION — {severity.upper()} SLA Breach Requires Immediate Attention"
     body = _build_html_email(complaint_summary, severity)
 
-    recipient = settings.smtp_to_authority
-    logger.info(f"Notifying Authority ({recipient}) — severity={severity}")
+    recipients = _get_notification_recipients(role="higher_authority")
+    if not recipients:
+        # Final fallback to env setting
+        fallback = settings.smtp_to_authority
+        recipients = [fallback] if fallback else []
+    if not recipients:
+        logger.warning("No Authority notification recipients found — skipping email")
+        return {"status": "skipped", "reason": "no recipients"}
 
-    result = send_email(to=recipient, subject=subject, body=body, html=True)
-    return result
+    logger.info(f"Notifying Authority ({', '.join(recipients)}) — severity={severity}")
+
+    results = []
+    for recipient in recipients:
+        results.append(send_email(to=recipient, subject=subject, body=body, html=True))
+    return {"status": "sent", "recipients": recipients, "results": results}

@@ -41,9 +41,9 @@ export const statusColor: Record<string, string> = {
 };
 
 export const roleLabel: Record<string, string> = {
-  user: "User",
-  hr: "HR",
-  higher_authority: "Authority",
+  user: "Employee",
+  hr: "HR Admin",
+  higher_authority: "Senior Authority",
 };
 
 export const CHART_COLORS = [

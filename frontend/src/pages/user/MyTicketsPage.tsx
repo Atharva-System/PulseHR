@@ -6,7 +6,6 @@ import { useNavigate, Link } from "react-router-dom";
 import {
   Ticket,
   ArrowLeft,
-  Loader2,
   AlertCircle,
   Clock,
   CheckCircle2,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 import { cn } from "@/lib/utils";
+import { TicketCardsSkeleton } from "@/components/shared/Skeleton";
 
 const STATUS_CONFIG: Record<
   string,
@@ -172,10 +172,7 @@ export default function MyTicketsPage() {
           </div>
 
           {loading && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 size={28} className="animate-spin text-primary mb-2" />
-              <p className="text-sm text-muted-foreground">Loading tickets…</p>
-            </div>
+            <TicketCardsSkeleton count={4} />
           )}
 
           {error && (

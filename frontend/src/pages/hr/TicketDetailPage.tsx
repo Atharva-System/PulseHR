@@ -14,6 +14,7 @@ import {
   Timer,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { TicketDetailSkeleton } from "@/components/shared/Skeleton";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 
@@ -159,11 +160,7 @@ export default function TicketDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <TicketDetailSkeleton />;
   }
 
   if (!ticket) {

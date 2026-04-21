@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentGridSkeleton } from "@/components/shared/Skeleton";
 
 const AGENT_ICONS: Record<string, React.ReactNode> = {
   complaint_agent: <ShieldAlert size={22} className="text-red-500" />,
@@ -65,11 +66,7 @@ export default function AgentManagementPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
-    );
+    return <AgentGridSkeleton />;
   }
 
   return (

@@ -6,6 +6,10 @@ import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Search, Bot, User, MessageSquare } from "lucide-react";
 import Markdown from "react-markdown";
+import {
+  MessageColumnSkeleton,
+  ThreadListSkeleton,
+} from "@/components/shared/Skeleton";
 
 export default function ChatViewerPage() {
   const location = useLocation();
@@ -66,9 +70,7 @@ export default function ChatViewerPage() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {loadingUsers ? (
-              <div className="flex h-32 items-center justify-center">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
+              <ThreadListSkeleton count={7} />
             ) : filteredUsers.length === 0 ? (
               <p className="p-6 text-center text-sm text-muted-foreground">
                 No conversations yet.
@@ -112,9 +114,7 @@ export default function ChatViewerPage() {
               </p>
             </div>
           ) : loadingMsgs ? (
-            <div className="flex flex-1 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-3 border-primary border-t-transparent" />
-            </div>
+            <MessageColumnSkeleton count={6} />
           ) : (
             <>
               <div className="border-b border-border px-6 py-3 bg-muted/20">

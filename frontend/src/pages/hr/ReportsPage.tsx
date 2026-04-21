@@ -18,6 +18,7 @@ import {
   Line,
   CartesianGrid,
 } from "recharts";
+import { ReportsSkeleton } from "@/components/shared/Skeleton";
 
 export default function ReportsPage() {
   const [days, setDays] = useState(30);
@@ -36,11 +37,7 @@ export default function ReportsPage() {
   }, [days]);
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <ReportsSkeleton />;
   }
 
   if (!summary || !agentReport) return null;

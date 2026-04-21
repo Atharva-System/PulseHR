@@ -76,3 +76,23 @@ class PolicyViolationResult(BaseModel):
         default="",
         description="Brief reasoning for the decision"
     )
+
+
+class DissatisfactionCheckResult(BaseModel):
+    """Output of the ticket dissatisfaction check."""
+
+    is_dissatisfied: bool = Field(
+        description="True if the employee is expressing dissatisfaction with a resolved/closed ticket"
+    )
+    related_ticket_id: str = Field(
+        default="",
+        description="The ticket ID the employee is referring to (empty if none)"
+    )
+    reasoning: str = Field(
+        default="",
+        description="Brief reasoning for the decision"
+    )
+    is_new_complaint: bool = Field(
+        default=False,
+        description="True if this is a completely new, unrelated complaint"
+    )

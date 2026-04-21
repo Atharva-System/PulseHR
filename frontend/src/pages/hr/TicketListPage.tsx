@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { TableRowsSkeleton } from "@/components/shared/Skeleton";
 
 const STATUS_TABS = ["all", "open", "in_progress", "resolved", "closed"];
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
@@ -127,9 +128,7 @@ export default function TicketListPage() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-3 border-primary border-t-transparent" />
-          </div>
+          <TableRowsSkeleton columns={10} rows={6} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
