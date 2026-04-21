@@ -38,6 +38,7 @@ The product is built around a simple idea:
 - policy question answering grounded in stored policy data
 - ticket tracking for submitted issues
 - post-resolution feedback collection
+- dissatisfaction escalation when a low review automatically re-opens the ticket and alerts higher authority
 
 ### HR / Admin Experience
 
@@ -49,6 +50,7 @@ The product is built around a simple idea:
 - policy CRUD and seeding tools
 - internal messaging between HR and higher authority
 - agent activation / deactivation controls
+- automatic re-escalation of poorly reviewed tickets to senior authority
 
 ## Product Surfaces
 
@@ -196,6 +198,15 @@ flowchart TD
 - `high` → notify HR, create ticket
 - `medium` → create ticket
 - `low` → log / track appropriately
+
+### Post-Resolution Feedback Escalation
+
+PulseHR AI also closes the loop after ticket resolution:
+
+- employees can submit feedback for resolved or closed tickets
+- when a review is poor (`rating <= 2`), the system automatically re-opens the ticket
+- the platform sends an escalation email to higher authority for manual review
+- this ensures unresolved dissatisfaction is surfaced instead of being hidden behind a closed status
 
 For a fuller reference, see [hr-ai-platform/AGENT_FLOW.md](/home/vedp/my-project/IntentBot/hr-ai-platform/AGENT_FLOW.md:1).
 
