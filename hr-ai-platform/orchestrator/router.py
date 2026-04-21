@@ -1,6 +1,14 @@
-"""Intent router — LLM-based classification of user messages."""
+"""Intent router — LLM-based classification of user messages.
 
-from pydantic import BaseModel, Field
+Uses a plain LLM call with JSON parsing (no with_structured_output) for
+maximum compatibility across all deployment environments.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import traceback
 
 from app.dependencies import get_llm
 from orchestrator.state import HRState
@@ -8,78 +16,128 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
 # ---------------------------------------------------------------------------
-# Structured output model
+# Valid intents (single source of truth)
 # ---------------------------------------------------------------------------
-
-class IntentClassification(BaseModel):
-    """Schema returned by the LLM for intent classification."""
-
-    intent: str = Field(
-        description=(
-            "One of: employee_complaint, leave_request, payroll_query, "
-            "policy_question, general_query"
-        )
-    )
-    confidence: float = Field(
-        description="Confidence score between 0.0 and 1.0"
-    )
+VALID_INTENTS = {
+    "employee_complaint",
+    "leave_request",
+    "payroll_query",
+    "policy_question",
+    "general_query",
+}
 
 
 # ---------------------------------------------------------------------------
-# Prompt
+# Prompt  (with few-shot examples — asks LLM to return plain JSON)
 # ---------------------------------------------------------------------------
 
 INTENT_PROMPT = """\
-You are an HR intent classifier. Analyze the employee's message and determine
-their intent.
+You are an expert HR intent classifier. Read the employee's message and return \
+ONLY a JSON object with "intent" and "confidence". No other text.
 
-RECENT CONVERSATION HISTORY:
-{conversation_history}
+CATEGORIES:
+- employee_complaint: filing a complaint, reporting misconduct, harassment, \
+bullying, unfair treatment, discrimination, hostile work environment, or \
+dissatisfaction about a person/policy/working condition. Also for follow-up \
+replies in an ongoing complaint conversation.
+- leave_request: applying for leave, checking leave balance, vacation days, \
+sick leave, time off, PTO, FMLA, or absence.
+- payroll_query: salary, payslip, pay stub, deductions, bonuses, compensation, \
+tax, or wages.
+- policy_question: asking about company policies, rules, guidelines, procedures, \
+employee handbook, work-from-home policy, dress code, probation, notice period, \
+or any official HR policy.
+- general_query: greetings, small talk, thank-you messages, positive feedback, \
+or anything that does NOT fit above categories.
 
-TICKET CONTEXT:
-{ticket_context}
+EXAMPLES:
+Employee: "I want to file a complaint against my manager"
+{{"intent": "employee_complaint", "confidence": 0.98}}
 
-CURRENT EMPLOYEE MESSAGE:
-{message}
+Employee: "What is our leave policy?"
+{{"intent": "policy_question", "confidence": 0.97}}
 
-Classify into exactly ONE of these categories:
-- employee_complaint: The employee is raising a NEW complaint, reporting an issue, \
-expressing dissatisfaction about a person, policy, or working condition. \
-ALSO use this if the recent history shows an ongoing complaint conversation \
-and the employee is replying with follow-up details, confirmations like \
-"yes", "no", "that's all", "go ahead", etc. \
-ALSO use this if the employee is expressing dissatisfaction with a resolved/closed \
-ticket or saying things are NOT resolved.
-- leave_request: The employee wants to apply for leave, check leave balance, \
-or ask about time off.
-- payroll_query: The employee is asking about salary, payslips, deductions, \
-bonuses, or compensation.
-- policy_question: The employee is asking about company policies, rules, \
-guidelines, or procedures.
-- general_query: Greetings, small talk, positive feedback about resolved tickets, \
-or anything that does not fit the above categories.
+Employee: "How many vacation days do I have left?"
+{{"intent": "leave_request", "confidence": 0.96}}
 
-IMPORTANT RULES:
-1. If the conversation history shows the employee was recently discussing a \
-complaint and their current message is a short reply or confirmation, \
-classify it as employee_complaint (not general_query).
-2. If the employee has open/in-progress tickets and is asking about the status, \
-classify as general_query (the AI will handle ticket status awareness).
-3. If the employee has a resolved ticket and is saying they are NOT satisfied \
-or the issue is NOT resolved, classify as employee_complaint.
-4. If the employee has a resolved ticket and is saying they ARE satisfied or \
-giving positive feedback, classify as general_query.
-5. CRITICAL: If the last HR Assistant message in the conversation history shows \
-a ticket was ALREADY CREATED (contains phrases like "Complaint Has Been Registered", \
-"Ticket ID:", "TKT-", or a ticket confirmation), the complaint is ALREADY HANDLED. \
-Classify as general_query UNLESS the employee is clearly raising a completely NEW \
-and DIFFERENT complaint topic. Greetings, short replies, or references to the \
-same complaint must be general_query.
+Employee: "I want to apply for sick leave next Monday"
+{{"intent": "leave_request", "confidence": 0.97}}
 
-Return the intent and your confidence (0.0 – 1.0).
+Employee: "Can I see my latest payslip?"
+{{"intent": "payroll_query", "confidence": 0.97}}
+
+Employee: "What is the work from home policy?"
+{{"intent": "policy_question", "confidence": 0.97}}
+
+Employee: "What's the company policy on probation period?"
+{{"intent": "policy_question", "confidence": 0.97}}
+
+Employee: "My manager has been harassing me"
+{{"intent": "employee_complaint", "confidence": 0.99}}
+
+Employee: "Hello, how are you?"
+{{"intent": "general_query", "confidence": 0.95}}
+
+Employee: "Thanks, that's helpful!"
+{{"intent": "general_query", "confidence": 0.93}}
+
+Employee: "What are the working hours?"
+{{"intent": "policy_question", "confidence": 0.96}}
+
+Employee: "How much is my salary this month?"
+{{"intent": "payroll_query", "confidence": 0.96}}
+
+Employee: "I'd like to take 3 days off next week"
+{{"intent": "leave_request", "confidence": 0.97}}
+
+Employee: "can you tell me about leave policy"
+{{"intent": "policy_question", "confidence": 0.97}}
+
+CONTEXT:
+History: {conversation_history}
+Tickets: {ticket_context}
+
+CURRENT MESSAGE: {message}
+
+RULES:
+1. Ongoing complaint + short reply → employee_complaint
+2. Resolved ticket + NOT satisfied → employee_complaint
+3. Ticket ALREADY CREATED + greeting/short reply → general_query
+4. Mentions policy/rule/guideline → prefer policy_question over general_query
+5. Asking ABOUT leave policy → policy_question; wanting to TAKE leave → leave_request
+
+Respond with ONLY the JSON object, nothing else:
 """
+
+
+# ---------------------------------------------------------------------------
+# JSON parser — extracts intent from plain LLM text response
+# ---------------------------------------------------------------------------
+
+def _parse_intent_response(text: str) -> tuple[str, float]:
+    """Extract intent and confidence from LLM plain-text response.
+
+    Tries JSON parsing first, then regex fallback.
+    Returns (intent, confidence).
+    """
+    # Try to find JSON in the response
+    json_match = re.search(r'\{[^}]+\}', text)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            intent = data.get("intent", "general_query")
+            confidence = float(data.get("confidence", 0.9))
+            return intent, confidence
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Regex fallback: look for intent value in text
+    for valid in VALID_INTENTS:
+        if valid in text.lower():
+            return valid, 0.85
+
+    return "general_query", 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +145,7 @@ Return the intent and your confidence (0.0 – 1.0).
 # ---------------------------------------------------------------------------
 
 def classify_intent(state: HRState) -> dict:
-    """Classify the user's intent using an LLM.
+    """Classify the user's intent using a plain LLM call + JSON parsing.
 
     Returns dict with ``intent`` and ``confidence``.
     """
@@ -98,18 +156,15 @@ def classify_intent(state: HRState) -> dict:
 
     try:
         llm = get_llm()
-        structured_llm = llm.with_structured_output(IntentClassification)
 
         # Build conversation history string for context
         history_parts = []
         for entry in state.get("conversation_history", []):
             history_parts.append(f"Employee: {entry.get('content', '')}")
             history_parts.append(f"HR Assistant: {entry.get('content2', '')}")
-        history_str = "\n".join(history_parts) if history_parts else "(No prior conversation)"
+        history_str = "\n".join(history_parts) if history_parts else "(none)"
 
         # ---------- Programmatic guard: ticket already created ----------
-        # If the last bot response contains ticket creation markers,
-        # and the new message is short/generic, skip complaint entirely.
         last_bot_msg = ""
         for entry in reversed(state.get("conversation_history", [])):
             if entry.get("content2"):
@@ -142,33 +197,43 @@ def classify_intent(state: HRState) -> dict:
         tc = state.get("ticket_context", {})
         ticket_parts = []
         for t in tc.get("open_tickets", []):
-            ticket_parts.append(f"- OPEN ticket {t['ticket_id']}: {t.get('title','')} (severity: {t.get('severity','')})")
+            ticket_parts.append(f"OPEN {t['ticket_id']}: {t.get('title','')}")
         for t in tc.get("resolved_tickets", []):
-            fb_info = f", rating: {t['rating']}/5" if t.get("rating") else ", no feedback yet"
-            ticket_parts.append(f"- RESOLVED ticket {t['ticket_id']}: {t.get('title','')}{fb_info}")
+            ticket_parts.append(f"RESOLVED {t['ticket_id']}: {t.get('title','')}")
         for t in tc.get("closed_tickets", []):
-            fb_info = f", rating: {t['rating']}/5" if t.get("rating") else ""
-            ticket_parts.append(f"- CLOSED ticket {t['ticket_id']}: {t.get('title','')}{fb_info}")
-        ticket_str = "\n".join(ticket_parts) if ticket_parts else "(No tickets)"
+            ticket_parts.append(f"CLOSED {t['ticket_id']}: {t.get('title','')}")
+        ticket_str = ", ".join(ticket_parts) if ticket_parts else "(none)"
 
         prompt = INTENT_PROMPT.format(
             message=message,
             conversation_history=history_str,
             ticket_context=ticket_str,
         )
-        result: IntentClassification = structured_llm.invoke(prompt)
+
+        # Plain LLM call — no with_structured_output, maximum compatibility
+        ai_message = llm.invoke(prompt)
+        raw_text = ai_message.content.strip()
+        logger.info(f"[{trace_id}] Raw LLM response: {raw_text[:120]}")
+
+        intent, confidence = _parse_intent_response(raw_text)
+
+        # Validate
+        if intent not in VALID_INTENTS:
+            logger.warning(
+                f"[{trace_id}] LLM returned unknown intent '{intent}', "
+                f"falling back to general_query"
+            )
+            return {"intent": "general_query", "confidence": 0.5}
 
         logger.info(
-            f"[{trace_id}] Intent detected: {result.intent} "
-            f"(confidence: {result.confidence:.2f})"
+            f"[{trace_id}] Intent detected: {intent} "
+            f"(confidence: {confidence:.2f})"
         )
-        return {
-            "intent": result.intent,
-            "confidence": result.confidence,
-        }
+        return {"intent": intent, "confidence": confidence}
 
     except Exception as e:
         logger.error(f"[{trace_id}] Error in classify_intent: {e}")
+        logger.error(f"[{trace_id}] Traceback: {traceback.format_exc()}")
         return {
             "intent": "general_query",
             "confidence": 0.0,
