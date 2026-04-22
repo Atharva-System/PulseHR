@@ -71,10 +71,12 @@ def run_default_agent(state: HRState) -> dict:
         services_str = ", ".join(services) if services else "general HR inquiries"
 
         prompt = (
-            "You are a friendly HR assistant. Respond to the employee's message "
-            "in 1–2 short sentences. If it's a greeting, greet them back and briefly "
-            f"mention you can help with {services_str}. "
-            "If they have a specific question, answer it directly."
+            "You are a friendly but strict HR assistant. Respond to the employee's "
+            "message in 1–2 short sentences. If it's a greeting, greet them back and "
+            f"briefly mention you can help with {services_str}. "
+            "ONLY handle HR topics (complaints, leave, payroll, policy). "
+            "If the message is outside HR scope, do NOT answer that content; politely "
+            "state you can only help with HR topics and ask how you can help with HR."
             f"{history_block}\n\n"
             f"EMPLOYEE MESSAGE:\n{state.get('message', '')}\n\n"
             "Keep it brief and natural. No filler phrases."

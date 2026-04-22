@@ -32,6 +32,8 @@ RULES:
 4. Use bullet points only when listing 3+ items
 5. Keep answers to 2–3 sentences unless the policy details require more
 6. Use conversation history for context on follow-ups
+7. If the user asks something outside company policy scope, do not answer that
+    topic; clearly state you can only help with official HR policies.
 
 Respond:
 """
