@@ -33,6 +33,28 @@ export default function LoginPage() {
     }
   };
 
+  const DEMO_ACCOUNTS = [
+    {
+      label: "Employee",
+      username: "user@1",
+      password: "1234",
+      color: "#2563eb",
+    },
+    { label: "HR Admin", username: "hr@1", password: "1234", color: "#7c3aed" },
+    {
+      label: "Senior Authority",
+      username: "ceo@1",
+      password: "admin123",
+      color: "#059669",
+    },
+  ];
+
+  const fillDemo = (acc: (typeof DEMO_ACCOUNTS)[number]) => {
+    setUsername(acc.username);
+    setPassword(acc.password);
+    setError("");
+  };
+
   return (
     <div
       className="flex min-h-screen items-center justify-center"
@@ -133,6 +155,40 @@ export default function LoginPage() {
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Contact your administrator if you don't have an account.
           </p>
+
+          {/* Demo accounts */}
+          <div className="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3">
+            <p className="mb-2.5 text-center text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+              Demo Accounts
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <button
+                  key={acc.username}
+                  type="button"
+                  onClick={() => fillDemo(acc)}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors hover:bg-white hover:shadow-sm"
+                  style={{ border: "1px solid #e2e8f0" }}
+                >
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                    style={{ backgroundColor: acc.color }}
+                  >
+                    {acc.label}
+                  </span>
+                  <span className="font-mono text-slate-500">
+                    {acc.username}
+                  </span>
+                  <span className="font-mono text-slate-400">
+                    {acc.password}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-[10px] text-slate-400">
+              Click any row to auto-fill credentials
+            </p>
+          </div>
         </div>
       </div>
     </div>
