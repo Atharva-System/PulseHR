@@ -27,6 +27,7 @@ class CreateUserRequest(BaseModel):
     password: str = Field(..., min_length=4)
     role: str = Field("user", pattern="^(user|hr|higher_authority)$")
     receive_notifications: bool = False
+    notification_levels: Optional[list[str]] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -35,6 +36,7 @@ class UpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = Field(None, pattern="^(user|hr|higher_authority)$")
     receive_notifications: Optional[bool] = None
+    notification_levels: Optional[list[str]] = None
 
 
 class UserResponse(BaseModel):
@@ -45,6 +47,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     receive_notifications: bool = False
+    notification_levels: list[str] = ["critical", "high", "medium", "low"]
     created_by: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -179,6 +182,10 @@ async def update_user(
             user.role = body.role
         if body.receive_notifications is not None:
             user.receive_notifications = body.receive_notifications
+        if body.notification_levels is not None:
+            valid = {"critical", "high", "medium", "low"}
+            levels = [l for l in body.notification_levels if l in valid]
+            user.notification_levels = ",".join(levels) if levels else ""
 
         session.commit()
         session.refresh(user)

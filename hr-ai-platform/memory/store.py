@@ -90,6 +90,7 @@ class PostgresMemoryStore:
                     emotion=entry.emotion,
                     severity=entry.severity,
                     agent_used=entry.agent_used,
+                    privacy_mode=entry.privacy_mode,
                     trace_id=entry.trace_id,
                     timestamp=datetime.fromisoformat(entry.timestamp)
                     if entry.timestamp
@@ -126,6 +127,7 @@ class PostgresMemoryStore:
                         emotion=r.emotion or "",
                         severity=r.severity or "",
                         agent_used=r.agent_used or "",
+                        privacy_mode=r.privacy_mode or "identified",
                         trace_id=r.trace_id or "",
                         timestamp=r.timestamp.isoformat() if r.timestamp else "",
                     )
@@ -148,6 +150,8 @@ class PostgresMemoryStore:
                     complaint_type=record.complaint_type,
                     emotion=record.emotion,
                     severity=record.severity,
+                    privacy_mode=record.privacy_mode,
+                    complaint_target=record.complaint_target,
                     escalation_action=record.escalation_action,
                     ticket_id=record.ticket_id,
                     trace_id=record.trace_id,
@@ -184,6 +188,8 @@ class PostgresMemoryStore:
                         complaint_type=r.complaint_type or "",
                         emotion=r.emotion or "",
                         severity=r.severity or "",
+                        privacy_mode=r.privacy_mode or "identified",
+                        complaint_target=getattr(r, "complaint_target", "") or "",
                         escalation_action=r.escalation_action or "",
                         ticket_id=r.ticket_id or "",
                         trace_id=r.trace_id or "",

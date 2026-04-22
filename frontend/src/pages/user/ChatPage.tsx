@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { chatApi, myApi } from "@/api/services";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, PrivacyMode } from "@/types";
 import {
   Bot,
   Send,
@@ -10,6 +10,7 @@ import {
   Ticket,
   History,
   Sparkles,
+  Shield,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
@@ -144,6 +145,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [privacyMode, setPrivacyMode] = useState<PrivacyMode>("identified");
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
@@ -202,7 +204,7 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { data } = await chatApi.send(text);
+      const { data } = await chatApi.send(text, privacyMode);
       const botId = Date.now().toString() + "-bot";
       const botMsg: ChatMessage = {
         id: botId,
@@ -385,23 +387,53 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="border-t border-border bg-white px-4 py-4">
-        <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Type your message…"
-            className="flex-1 rounded-xl border border-input bg-muted/30 px-4 py-3 text-sm outline-none transition-colors focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
-            disabled={loading}
-          />
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-white shadow-md shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send size={18} />
-          </button>
+        <div className="mx-auto max-w-3xl space-y-3">
+          <div className="flex flex-col gap-2 rounded-2xl border border-border bg-slate-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <Shield size={14} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Complaint privacy
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Used when this conversation becomes a complaint ticket.
+                </p>
+              </div>
+            </div>
+            <select
+              value={privacyMode}
+              onChange={(e) =>
+                setPrivacyMode(e.target.value as PrivacyMode)
+              }
+              disabled={loading}
+              className="rounded-xl border border-input bg-white px-3 py-2 text-sm font-medium text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="identified">Identified</option>
+              <option value="confidential">Confidential</option>
+              <option value="anonymous">Anonymous</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              placeholder="Type your message…"
+              className="flex-1 rounded-xl border border-input bg-muted/30 px-4 py-3 text-sm outline-none transition-colors focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
+              disabled={loading}
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading || !input.trim()}
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-white shadow-md shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send size={18} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

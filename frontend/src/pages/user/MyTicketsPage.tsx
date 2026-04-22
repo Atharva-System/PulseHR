@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { myApi, feedbackApi } from "@/api/services";
+import { feedbackApi } from "@/api/services";
+import { useMyTickets } from "@/hooks/useQueries";
 import type { MyTicket, Feedback } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -13,6 +14,7 @@ import {
   LogOut,
   Star,
   Send,
+  Shield,
 } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 import { cn } from "@/lib/utils";
@@ -55,11 +57,24 @@ const SEVERITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700",
 };
 
+const PRIVACY_CONFIG: Record<string, { label: string; className: string }> = {
+  identified: {
+    label: "Identified",
+    className: "bg-slate-100 text-slate-700",
+  },
+  confidential: {
+    label: "Confidential",
+    className: "bg-indigo-100 text-indigo-700",
+  },
+  anonymous: {
+    label: "Anonymous",
+    className: "bg-violet-100 text-violet-700",
+  },
+};
+
 export default function MyTicketsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState<MyTicket[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   // Feedback state
@@ -71,32 +86,26 @@ export default function MyTicketsPage() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
+  const { data: tickets = [], isLoading: loading } = useMyTickets();
+
+  // Load existing feedback for resolved/closed tickets after tickets load
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const { data } = await myApi.tickets();
-        setTickets(data);
-        // Load existing feedback for resolved/closed tickets
-        for (const t of data) {
-          if (t.status === "resolved" || t.status === "closed") {
-            try {
-              const { data: fb } = await feedbackApi.get(t.ticket_id);
-              if (fb && fb.id) {
-                setFeedbackMap((prev) => ({ ...prev, [t.ticket_id]: fb }));
-              }
-            } catch {
-              /* no feedback yet */
+    if (!tickets.length) return;
+    tickets
+      .filter((t) => t.status === "resolved" || t.status === "closed")
+      .forEach((t) => {
+        feedbackApi
+          .get(t.ticket_id)
+          .then(({ data: fb }) => {
+            if (fb && fb.id) {
+              setFeedbackMap((prev) => ({ ...prev, [t.ticket_id]: fb }));
             }
-          }
-        }
-      } catch {
-        setError("Failed to load tickets");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTickets();
-  }, []);
+          })
+          .catch(() => {
+            /* no feedback yet */
+          });
+      });
+  }, [tickets]);
 
   const handleSubmitFeedback = async (ticketId: string) => {
     if (feedbackRating === 0 || submittingFeedback) return;
@@ -171,9 +180,7 @@ export default function MyTicketsPage() {
             </div>
           </div>
 
-          {loading && (
-            <TicketCardsSkeleton count={4} />
-          )}
+          {loading && <TicketCardsSkeleton count={4} />}
 
           {error && (
             <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -211,6 +218,9 @@ export default function MyTicketsPage() {
                   STATUS_CONFIG[ticket.status] || STATUS_CONFIG["open"];
                 const severityColor =
                   SEVERITY_COLORS[ticket.severity] || SEVERITY_COLORS["medium"];
+                const privacyCfg =
+                  PRIVACY_CONFIG[ticket.privacy_mode] ||
+                  PRIVACY_CONFIG.identified;
 
                 return (
                   <div
@@ -246,14 +256,25 @@ export default function MyTicketsPage() {
 
                     {/* Bottom row: severity + dates */}
                     <div className="flex items-center justify-between">
-                      <span
-                        className={cn(
-                          "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                          severityColor,
-                        )}
-                      >
-                        {ticket.severity.toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                            severityColor,
+                          )}
+                        >
+                          {ticket.severity.toUpperCase()}
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                            privacyCfg.className,
+                          )}
+                        >
+                          <Shield size={11} />
+                          {privacyCfg.label}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         {ticket.created_at && (
                           <span>

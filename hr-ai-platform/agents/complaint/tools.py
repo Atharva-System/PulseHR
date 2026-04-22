@@ -15,6 +15,8 @@ def create_hr_ticket(
     complaint_type: str,
     severity: str,
     message: str,
+    privacy_mode: str = "identified",
+    complaint_target: str = "",
     trace_id: str = "",
 ) -> str:
     """Create an HR ticket for a complaint.
@@ -28,6 +30,8 @@ def create_hr_ticket(
         description=message,
         severity=severity,
         user_id=user_id,
+        privacy_mode=privacy_mode,
+        complaint_target=complaint_target,
         trace_id=trace_id,
     )
     log_event(
@@ -60,6 +64,8 @@ def log_complaint(
     complaint_type: str,
     emotion: str,
     severity: str,
+    privacy_mode: str = "identified",
+    complaint_target: str = "",
     escalation_action: str = "",
     ticket_id: str = "",
     trace_id: str = "",
@@ -73,6 +79,8 @@ def log_complaint(
         complaint_type=complaint_type,
         emotion=emotion,
         severity=severity,
+        privacy_mode=privacy_mode,
+        complaint_target=complaint_target,
         escalation_action=escalation_action,
         ticket_id=ticket_id,
         trace_id=trace_id,

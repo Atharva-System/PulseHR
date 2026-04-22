@@ -12,6 +12,7 @@ import {
   Bot,
   FileText,
   MessageCircle,
+  Bell,
 } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 
@@ -64,6 +65,11 @@ export default function Sidebar() {
       to: `${basePath}/agents`,
       label: "Agents",
       icon: <Bot size={20} />,
+    });
+    navItems.push({
+      to: `${basePath}/notifications`,
+      label: "Notifications",
+      icon: <Bell size={20} />,
     });
   }
 

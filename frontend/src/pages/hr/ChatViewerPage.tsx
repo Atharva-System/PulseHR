@@ -4,15 +4,46 @@ import { conversationsApi } from "@/api/services";
 import type { ConversationUser, Conversation } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Search, Bot, User, MessageSquare } from "lucide-react";
+import {
+  Search,
+  Bot,
+  User,
+  MessageSquare,
+  Shield,
+  Lock,
+  EyeOff,
+} from "lucide-react";
 import Markdown from "react-markdown";
 import {
   MessageColumnSkeleton,
   ThreadListSkeleton,
 } from "@/components/shared/Skeleton";
+import { useAuth } from "@/contexts/AuthContext";
+
+const PRIVACY_BADGE: Record<
+  string,
+  { label: string; icon: typeof Shield; className: string }
+> = {
+  identified: {
+    label: "Identified",
+    icon: Shield,
+    className: "bg-slate-100 text-slate-600",
+  },
+  confidential: {
+    label: "Confidential",
+    icon: Lock,
+    className: "bg-amber-100 text-amber-700",
+  },
+  anonymous: {
+    label: "Anonymous",
+    icon: EyeOff,
+    className: "bg-violet-100 text-violet-700",
+  },
+};
 
 export default function ChatViewerPage() {
   const location = useLocation();
+  const { user: currentUser } = useAuth();
   const userFromUrl = new URLSearchParams(location.search).get("user");
   const [users, setUsers] = useState<ConversationUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(userFromUrl);
@@ -40,6 +71,19 @@ export default function ChatViewerPage() {
   const filteredUsers = users.filter((u) =>
     u.user_id.toLowerCase().includes(search.toLowerCase()),
   );
+  const selectedUserMeta =
+    users.find((u) => (u.lookup_user_id || u.user_id) === selectedUser) || null;
+  const selectedUserLabel = selectedUserMeta?.user_id || selectedUser;
+  const selectedPrivacy = selectedUserMeta?.privacy_mode || "identified";
+  const badge = PRIVACY_BADGE[selectedPrivacy] || PRIVACY_BADGE.identified;
+  const BadgeIcon = badge.icon;
+
+  // Content is hidden when messages array is empty but user was selected
+  // (backend returns [] for protected privacy) OR when messages contain
+  // the placeholder text.
+  const contentHidden =
+    messages.length === 0 ||
+    messages.some((m) => m.message?.startsWith("[Content hidden"));
 
   return (
     <div className="space-y-6">
@@ -76,30 +120,56 @@ export default function ChatViewerPage() {
                 No conversations yet.
               </p>
             ) : (
-              filteredUsers.map((u) => (
-                <button
-                  key={u.user_id}
-                  onClick={() => setSelectedUser(u.user_id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border transition-colors",
-                    selectedUser === u.user_id
-                      ? "bg-primary/5 border-l-2 border-l-primary"
-                      : "hover:bg-muted/30",
-                  )}
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <User size={16} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {u.user_id}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {u.message_count} messages
-                    </p>
-                  </div>
-                </button>
-              ))
+              filteredUsers.map((u) => {
+                // Admin sees privacy badges; HR only sees identified users (no hints)
+                const isAdmin = currentUser?.role === "higher_authority";
+                const pBadge =
+                  PRIVACY_BADGE[u.privacy_mode] || PRIVACY_BADGE.identified;
+                const PIcon = pBadge.icon;
+                const canClick = !!u.lookup_user_id;
+
+                return (
+                  <button
+                    key={u.lookup_user_id || u.user_id}
+                    onClick={() => {
+                      if (!canClick) return;
+                      setSelectedUser(u.lookup_user_id!);
+                    }}
+                    disabled={!canClick}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border transition-colors",
+                      selectedUser === (u.lookup_user_id || u.user_id)
+                        ? "bg-primary/5 border-l-2 border-l-primary"
+                        : "hover:bg-muted/30",
+                    )}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <User size={16} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {u.user_id}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {isAdmin && u.privacy_mode !== "identified" && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                              pBadge.className,
+                            )}
+                          >
+                            <PIcon size={10} />
+                            {pBadge.label}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {u.message_count} messages
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
@@ -115,15 +185,47 @@ export default function ChatViewerPage() {
             </div>
           ) : loadingMsgs ? (
             <MessageColumnSkeleton count={6} />
+          ) : contentHidden ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-center px-8">
+              <div
+                className={cn(
+                  "flex h-14 w-14 items-center justify-center rounded-2xl",
+                  badge.className,
+                )}
+              >
+                <BadgeIcon size={24} />
+              </div>
+              <h3 className="mt-4 text-base font-semibold text-foreground">
+                Chat content is protected
+              </h3>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                {selectedPrivacy === "anonymous"
+                  ? "This conversation is in anonymous mode. Chat content is not visible to anyone."
+                  : "This conversation is confidential. Only senior authority can view the messages."}
+              </p>
+            </div>
           ) : (
             <>
-              <div className="border-b border-border px-6 py-3 bg-muted/20">
-                <p className="text-sm font-semibold text-foreground">
-                  {selectedUser}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {messages.length} messages
-                </p>
+              <div className="border-b border-border px-6 py-3 bg-muted/20 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {selectedUserLabel}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {messages.length} messages
+                  </p>
+                </div>
+                {selectedPrivacy !== "identified" && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                      badge.className,
+                    )}
+                  >
+                    <BadgeIcon size={12} />
+                    {badge.label}
+                  </span>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                 {messages.map((m) => (

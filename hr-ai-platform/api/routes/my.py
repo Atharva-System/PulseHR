@@ -34,6 +34,8 @@ class MyTicketResponse(BaseModel):
     title: str
     description: str
     severity: str
+    privacy_mode: str
+    complaint_target: str = ""
     status: str
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -95,6 +97,8 @@ async def my_tickets(
                 title=t.title or "",
                 description=t.description or "",
                 severity=t.severity or "",
+                privacy_mode=t.privacy_mode or "identified",
+                complaint_target=getattr(t, "complaint_target", "") or "",
                 status=t.status or "",
                 created_at=t.created_at.isoformat() if t.created_at else None,
                 updated_at=t.updated_at.isoformat() if t.updated_at else None,

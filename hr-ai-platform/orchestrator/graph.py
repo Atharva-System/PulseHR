@@ -93,6 +93,7 @@ def run_default_agent(state: HRState) -> dict:
                 response=response_text,
                 intent=state.get("intent", "general_query"),
                 agent_used="default_agent",
+                privacy_mode=state.get("privacy_mode", "identified"),
                 trace_id=trace_id,
             )
             store.save_conversation(entry)

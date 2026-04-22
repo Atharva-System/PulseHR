@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { reportsApi } from "@/api/services";
-import type { ReportSummary, AgentReport } from "@/types";
+import { useState } from "react";
+import { useReportSummary, useReportAgents } from "@/hooks/useQueries";
+
 import { StatsCard } from "@/components/shared/Cards";
 import { CHART_COLORS } from "@/lib/utils";
 import { Ticket, MessageSquare, Users, TrendingUp } from "lucide-react";
@@ -22,21 +22,12 @@ import { ReportsSkeleton } from "@/components/shared/Skeleton";
 
 export default function ReportsPage() {
   const [days, setDays] = useState(30);
-  const [summary, setSummary] = useState<ReportSummary | null>(null);
-  const [agentReport, setAgentReport] = useState<AgentReport | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([reportsApi.summary(days), reportsApi.agents(days)])
-      .then(([s, a]) => {
-        setSummary(s.data);
-        setAgentReport(a.data);
-      })
-      .finally(() => setLoading(false));
-  }, [days]);
+  const { data: summary, isLoading: loadingSummary } = useReportSummary(days);
+  const { data: agentReport, isLoading: loadingAgents } = useReportAgents(days);
+  const loading = loadingSummary || loadingAgents;
 
-  if (loading) {
+  if (loading && !summary) {
     return <ReportsSkeleton />;
   }
 

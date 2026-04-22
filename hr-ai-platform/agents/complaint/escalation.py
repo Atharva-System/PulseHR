@@ -19,6 +19,8 @@ def handle_escalation(state: HRState) -> dict:
     message = state.get("message", "")
     complaint_type = state.get("complaint_type", "other")
     emotion = state.get("emotion", "neutral")
+    privacy_mode = state.get("privacy_mode", "identified")
+    complaint_target = state.get("complaint_target", "")
 
     logger.info(f"[{trace_id}] Escalation handler — severity={severity}")
 
@@ -37,6 +39,8 @@ def handle_escalation(state: HRState) -> dict:
                 complaint_type=complaint_type,
                 severity=severity,
                 message=message,
+                privacy_mode=privacy_mode,
+                complaint_target=complaint_target,
                 trace_id=trace_id,
             )
         elif action == "create_ticket":
@@ -45,6 +49,8 @@ def handle_escalation(state: HRState) -> dict:
                 complaint_type=complaint_type,
                 severity=severity,
                 message=message,
+                privacy_mode=privacy_mode,
+                complaint_target=complaint_target,
                 trace_id=trace_id,
             )
 
@@ -55,6 +61,8 @@ def handle_escalation(state: HRState) -> dict:
             complaint_type=complaint_type,
             emotion=emotion,
             severity=severity,
+            privacy_mode=privacy_mode,
+            complaint_target=complaint_target,
             escalation_action=action,
             ticket_id=ticket_id,
             trace_id=trace_id,

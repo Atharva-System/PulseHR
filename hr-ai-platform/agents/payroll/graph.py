@@ -77,6 +77,7 @@ def respond_node(state: HRState) -> dict:
             response=response_text,
             intent=state.get("intent", "payroll_query"),
             agent_used="payroll_agent",
+            privacy_mode=state.get("privacy_mode", "identified"),
             trace_id=trace_id,
         )
         store.save_conversation(entry)

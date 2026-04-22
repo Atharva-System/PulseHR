@@ -23,6 +23,8 @@ def create_ticket(
     severity: str,
     assignee: str = "hr-team",
     user_id: str = "",
+    privacy_mode: str = "identified",
+    complaint_target: str = "",
     trace_id: str = "",
 ) -> str:
     """Create an HR support ticket, persist to PostgreSQL, and return its ID.
@@ -33,6 +35,8 @@ def create_ticket(
         severity: low / medium / high / critical.
         assignee: Person or team assigned.
         user_id: Employee who raised the ticket.
+        privacy_mode: identified / confidential / anonymous.
+        complaint_target: Person the complaint is about.
         trace_id: Request trace ID.
 
     Returns:
@@ -53,6 +57,8 @@ def create_ticket(
                 title=title,
                 description=description,
                 severity=severity,
+                privacy_mode=privacy_mode,
+                complaint_target=complaint_target,
                 assignee=assignee,
                 status="open",
                 user_id=user_id,
@@ -86,6 +92,8 @@ def get_ticket(ticket_id: str) -> dict | None:
                     "title": row.title,
                     "description": row.description,
                     "severity": row.severity,
+                    "privacy_mode": row.privacy_mode or "identified",
+                    "complaint_target": getattr(row, "complaint_target", "") or "",
                     "assignee": row.assignee,
                     "status": row.status,
                     "user_id": row.user_id,
@@ -115,6 +123,7 @@ def get_tickets_by_user(user_id: str) -> list[dict]:
                     "ticket_id": r.ticket_id,
                     "title": r.title,
                     "severity": r.severity,
+                    "privacy_mode": r.privacy_mode or "identified",
                     "status": r.status,
                     "created_at": r.created_at.isoformat() if r.created_at else "",
                 }

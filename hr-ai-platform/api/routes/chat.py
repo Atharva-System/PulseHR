@@ -14,6 +14,7 @@ from orchestrator.graph import build_graph
 from orchestrator.state import HRState
 from utils.helpers import generate_trace_id, get_timestamp
 from utils.logger import get_logger
+from utils.privacy import normalize_privacy_mode
 
 logger = get_logger(__name__)
 
@@ -155,6 +156,7 @@ async def chat(
         initial_state: HRState = {
             "user_id": user_id,
             "message": request.message,
+            "privacy_mode": normalize_privacy_mode(request.privacy_mode),
             "intent": "",
             "confidence": 0.0,
             "emotion": "",

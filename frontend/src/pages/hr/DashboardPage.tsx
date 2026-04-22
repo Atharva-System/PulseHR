@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { reportsApi, ticketsApi } from "@/api/services";
+import { useDashboard } from "@/hooks/useQueries";
 import type { ReportSummary, Ticket } from "@/types";
 import { StatsCard } from "@/components/shared/Cards";
 import { SeverityBadge, StatusBadge } from "@/components/shared/Badges";
@@ -32,22 +31,13 @@ import { DashboardSkeleton } from "@/components/shared/Skeleton";
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [summary, setSummary] = useState<ReportSummary | null>(null);
-  const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const basePath = user?.role === "higher_authority" ? "/admin" : "/hr";
 
-  useEffect(() => {
-    Promise.all([reportsApi.summary(30), ticketsApi.list({ page_size: 5 })])
-      .then(([summaryRes, ticketsRes]) => {
-        setSummary(summaryRes.data);
-        setRecentTickets(ticketsRes.data);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading } = useDashboard();
+  const summary = data?.summary ?? null;
+  const recentTickets = data?.recentTickets ?? [];
 
-  if (loading) {
+  if (isLoading && !data) {
     return <DashboardSkeleton />;
   }
 

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usersApi, authApi } from "@/api/services";
+import { useUsers } from "@/hooks/useQueries";
 import type { User } from "@/types";
 import { RoleBadge } from "@/components/shared/Badges";
 import { formatDate } from "@/lib/utils";
@@ -17,8 +18,6 @@ import { TableRowsSkeleton } from "@/components/shared/Skeleton";
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -60,18 +59,14 @@ export default function UserManagementPage() {
 
   const isAuthority = currentUser?.role === "higher_authority";
 
-  const fetchUsers = () => {
-    setLoading(true);
-    usersApi
-      .list({ role: roleFilter || undefined })
-      .then((res) => setUsers(res.data))
-      .finally(() => setLoading(false));
-  };
+  const {
+    data: queryUsers,
+    isLoading: loading,
+    refetch: refetchUsers,
+  } = useUsers({ role: roleFilter || undefined });
+  const fetchUsers = () => refetchUsers();
 
-  useEffect(() => {
-    fetchUsers();
-  }, [roleFilter]);
-
+  const users = queryUsers ?? [];
   const filtered = users.filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
@@ -135,21 +130,13 @@ export default function UserManagementPage() {
     if (!isAuthority) return;
     setToggleError("");
     try {
-      const res = await usersApi.update(u.id, {
-        is_active: !u.is_active,
-      } as any);
-      // Optimistically update the local state immediately
-      setUsers((prev) =>
-        prev.map((usr) =>
-          usr.id === u.id ? { ...usr, is_active: res.data.is_active } : usr,
-        ),
-      );
+      await usersApi.update(u.id, { is_active: !u.is_active } as any);
+      refetchUsers();
     } catch (err: any) {
       setToggleError(
         err.response?.data?.detail || "Failed to update user status",
       );
-      // Refresh to get correct state
-      fetchUsers();
+      refetchUsers();
     }
   };
 

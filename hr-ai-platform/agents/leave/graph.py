@@ -75,6 +75,7 @@ def respond_node(state: HRState) -> dict:
             response=response_text,
             intent=state.get("intent", "leave_request"),
             agent_used="leave_agent",
+            privacy_mode=state.get("privacy_mode", "identified"),
             trace_id=trace_id,
         )
         store.save_conversation(entry)

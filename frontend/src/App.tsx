@@ -12,6 +12,7 @@ import ChatViewerPage from "@/pages/hr/ChatViewerPage";
 import ReportsPage from "@/pages/hr/ReportsPage";
 import UserManagementPage from "@/pages/hr/UserManagementPage";
 import AgentManagementPage from "@/pages/admin/AgentManagementPage";
+import NotificationManagementPage from "@/pages/admin/NotificationManagementPage";
 import PolicyManagementPage from "@/pages/hr/PolicyManagementPage";
 import MessagesPage from "@/pages/hr/MessagesPage";
 import MyTicketsPage from "@/pages/user/MyTicketsPage";
@@ -78,6 +79,10 @@ export default function App() {
                 />
                 <Route path="/admin/messages" element={<MessagesPage />} />
                 <Route path="/admin/agents" element={<AgentManagementPage />} />
+                <Route
+                  path="/admin/notifications"
+                  element={<NotificationManagementPage />}
+                />
               </Route>
             </Route>
 

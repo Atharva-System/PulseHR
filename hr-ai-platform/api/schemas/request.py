@@ -14,3 +14,8 @@ class ChatRequest(BaseModel):
     message: str = Field(
         ..., description="The employee's message", examples=["I want to apply for leave"]
     )
+    privacy_mode: str = Field(
+        default="identified",
+        description="Complaint privacy preference: identified, confidential, or anonymous",
+        pattern="^(identified|confidential|anonymous)$",
+    )
