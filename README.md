@@ -4,7 +4,7 @@ Most HR tools were built for **HR teams**, not for the people who actually need 
 
 ---
 
-## What Is PulseHR AI?
+## What Is PulseHR AI?**[→ See it in action](https://pulsehr-frontend.onrender.com)**
 
 PulseHR AI is a **full-stack AI operations platform** that lets employees describe problems in **plain language** and then does the hard work of **understanding, classifying, escalating, and tracking** those problems inside a structured HR workflow.
 
