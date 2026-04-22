@@ -82,7 +82,7 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
                 <td>
                   <span style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">⚠️ HR Alert</span>
                   <br/>
-                  <span style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;display:inline-block;">PulseHR AI — Automated Notification</span>
+                  <span style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;display:inline-block;">Pulsee AI — Automated Notification</span>
                 </td>
                 <td align="right">
                   <span style="background:{bg};color:{color};font-size:13px;font-weight:700;padding:6px 16px;border-radius:20px;">{severity_upper}</span>
@@ -123,7 +123,7 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
         <!-- Footer -->
         <tr>
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 32px;">
-            <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">This is an automated alert from <strong style="color:#64748b;">PulseHR AI</strong>. Please do not reply to this email.</p>
+            <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">This is an automated alert from <strong style="color:#64748b;">Pulsee AI</strong>. Please do not reply to this email.</p>
           </td>
         </tr>
       </table>
@@ -205,7 +205,7 @@ def notify_authority_hr_complaint(
                   <span style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">🚨 Conflict-of-Interest Escalation</span>
                   <br/>
                   <span style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:6px;display:inline-block;">
-                    PulseHR AI &mdash; Complaint Directed at HR Staff &mdash; Admin Eyes Only
+                    Pulsee AI &mdash; Complaint Directed at HR Staff &mdash; Admin Eyes Only
                   </span>
                 </td>
                 <td align="right">
@@ -277,7 +277,7 @@ def notify_authority_hr_complaint(
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 32px;">
             <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">
               This is a <strong style="color:#dc2626;">confidential escalation</strong> from
-              <strong style="color:#64748b;">PulseHR AI</strong>. Do not forward to HR staff.
+              <strong style="color:#64748b;">Pulsee AI</strong>. Do not forward to HR staff.
             </p>
           </td>
         </tr>

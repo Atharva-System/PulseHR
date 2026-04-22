@@ -1,18 +1,18 @@
-# PulseHR AI
+# Pulsee AI
 
-Most HR tools were built for **HR teams**, not for the people who actually need help. An employee dealing with **workplace harassment**, a **payroll discrepancy**, or a **sensitive personal situation** doesn't want to fill out a form — they want to talk to someone. **PulseHR AI** is what happens when you take that instinct seriously and build a system from the ground up around it.
+Most employees deal with problems they don't know how to report. Not because the problem isn't real but because the path between them and the right person is blocked by hierarchy, fear, or tools that weren't built for them. **Pulsee AI** changes that. It gives every employee a direct, private, conversational way to raise concerns, reach HR, or escalate straight to senior leadership without going through a manager, without filling out forms, and without worrying about who is watching.
 
 ---
 
-## What Is PulseHR AI?**[→ See it in action](https://pulsehr-frontend.onrender.com)**
+## What Is Pulsee AI? **[→ See it in action](https://pulsehr-frontend.onrender.com)**
 
-PulseHR AI is a **full-stack AI operations platform** that lets employees describe problems in **plain language** and then does the hard work of **understanding, classifying, escalating, and tracking** those problems inside a structured HR workflow.
+**Pulsee AI** is a **full-stack AI platform built for employees first**. When someone has a workplace problem — harassment, conflict, payroll issue, a question about policy — they shouldn't have to navigate an org chart to get help. They should be able to describe what's happening in plain language and have the system handle the rest: **understand the problem, ask the right questions, route it to the right people, and track it to resolution**.
 
-> **It is not a chatbot wrapper.** Under the hood it runs a **multi-agent LangGraph orchestration layer** that routes each employee message to the right specialist agent — complaint intake, leave management, payroll support, or policy lookup — depending on **real detected intent**. Each agent has its own logic, memory, and escalation rules. Everything that happens is **persisted, auditable, and visible** to the right people at the right time.
+> **It is not a chatbot wrapper.** Under the hood it runs a **multi-agent LangGraph orchestration layer** that routes each message to the right specialist — complaint intake, leave management, payroll support, or policy lookup — depending on **real detected intent**. Every conversation is **persisted, auditable, and visible** to the right people at the right time.
 
-On the HR side, the platform gives teams a proper operational workspace: **ticket dashboards**, **SLA tracking**, **conversation history**, **analytics reports**, **user and policy management**, **internal messaging**, and a **level-wise notification system** so every person on the team only gets alerted for the severity levels they actually care about.
+For employees who need to report something about HR itself, the system handles that too. It **automatically detects HR-targeted complaints**, upgrades privacy to confidential, and routes directly to **senior authority** — bypassing the HR team entirely. No awkward conversations, no risk of the complaint being buried.
 
-> **Nothing about this system is accidental.** Every feature in it exists because a real HR workflow demanded it.
+> **Nothing about this system is accidental.** Every feature exists because a real employee needed it and had no good way to act on it.
 
 ---
 
@@ -24,7 +24,7 @@ An employee who has been mistreated rarely knows which dropdown to select, which
 
 On the HR side, the problem is the opposite. Teams are buried in **unstructured input** — emails, verbal reports, informal messages — that they have to manually triage, classify, and act on. **There is no single source of truth. SLAs slip. Complaints get lost.**
 
-PulseHR AI **removes both bottlenecks at once**:
+Pulsee AI **removes both bottlenecks at once**:
 
 - employees describe problems **conversationally**, in any order, with **no forms**
 - the backend **understands intent**, fills in missing context through **targeted follow-up questions**, and produces a **structured, actionable record**
@@ -36,15 +36,23 @@ PulseHR AI **removes both bottlenecks at once**:
 
 ### The Employee Experience
 
-An employee opens the chat interface and types whatever is on their mind. **The platform does not ask them to pick a category. It listens.**
+**This is an employee tool. Everything starts with the employee.**
 
-A **LangGraph-powered intent classifier** reads the message in context and decides which specialist agent should take over. From that point the conversation feels natural — the agent asks exactly the follow-up questions needed to build a complete picture, confirms details before submitting, and then tells the employee what happens next.
+An employee opens the chat and types what's on their mind — in plain language, in any order. They don't choose a category. **They just talk.** The platform listens, understands, and responds like a knowledgeable HR assistant would.
 
-For complaints specifically, the agent is designed to behave like a **trained HR intake specialist**. It **identifies the complaint type**, **assesses emotional tone**, **estimates severity**, **checks relevant policy**, and **determines whether safety-critical elements are present**. It remembers everything said earlier in the conversation so it **never asks the same question twice**. When enough information exists to act, it writes a **professional summary** and **escalates automatically**.
+If they have a complaint, a **LangGraph-powered intent classifier** routes them to the complaint agent. The agent asks the targeted follow-up questions needed to build a complete picture — one question at a time, never repeating itself. It remembers the full conversation. When it has enough to act, it writes a **professional summary**, creates a ticket, and notifies the right team.
 
-Employees can also check their **ticket status** at any time, see **past conversations**, **request leave**, **ask payroll questions**, or **query policies** — all from the same interface, without switching between tools.
+**Crucially: the employee doesn't need a manager's permission or involvement.** The system is their direct line to HR and, when needed, to senior authority. If their complaint is about someone in HR, it goes straight to senior authority instead — automatically, privately, with no HR visibility at all.
 
-After a ticket is resolved, employees are invited to leave **feedback**. If a review score is **low**, the system **automatically re-opens the ticket**, notifies senior authority, and begins a fresh escalation cycle. **Closed does not mean gone.**
+Employees can also:
+
+- **request leave** and check balances
+- **ask payroll questions** and flag discrepancies
+- **query company policies** grounded in actual stored documents
+- **track their own tickets** and see resolution status
+- **leave feedback** after resolution — and if the review is poor, the ticket reopens and senior authority is alerted immediately
+
+**Closed does not mean gone.** The system follows up.
 
 ### The Agent Layer
 
@@ -459,4 +467,4 @@ When this system is running, you get:
 
 The goal from the start was to build a system that **actually works in a real workplace**. One where an employee in a difficult situation gets a response that **feels human**, and where the HR team gets **data they can act on**.
 
-> **That is what PulseHR AI is.**
+> **That is what Pulsee AI is.**
