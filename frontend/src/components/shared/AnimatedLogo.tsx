@@ -97,7 +97,7 @@ export default function AnimatedLogo({
                 WebkitTextFillColor: "transparent",
               }}
             >
-              HR
+              e
             </span>
             <span
               className="ml-1 inline-block align-super text-[9px] font-semibold tracking-wider uppercase rounded-full px-1.5 py-0.5"

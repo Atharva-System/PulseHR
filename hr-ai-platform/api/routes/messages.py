@@ -110,7 +110,7 @@ async def send_message(
         <tr>
           <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 32px;">
             <span style="font-size:22px;font-weight:700;color:#ffffff;">📩 New Internal Message</span><br/>
-            <span style="font-size:13px;color:rgba(255,255,255,0.8);">PulseHR AI — Internal Messaging</span>
+            <span style="font-size:13px;color:rgba(255,255,255,0.8);">Pulsee AI — Internal Messaging</span>
           </td>
         </tr>
         <tr>
@@ -125,13 +125,13 @@ async def send_message(
             </div>
             <br/>
             <p style="text-align:center;">
-              <a href="#" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in PulseHR →</a>
+              <a href="#" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
             </p>
           </td>
         </tr>
         <tr>
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
-            <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">This is an automated notification from <strong>PulseHR AI</strong>.</p>
+            <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">This is an automated notification from <strong>Pulsee AI</strong>.</p>
           </td>
         </tr>
       </table>
@@ -141,7 +141,7 @@ async def send_message(
 </html>"""
                 send_email(
                     to=recipient.email,
-                    subject=f"[PulseHR] New message from {current_user.username}",
+                    subject=f"[Pulsee] New message from {current_user.username}",
                     body=html_body,
                     html=True,
                 )
