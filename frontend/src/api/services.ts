@@ -21,6 +21,7 @@ import type {
   Policy,
   Message,
   MessageThread,
+  PrivacyMode,
 } from "@/types";
 
 // ── Auth ─────────────────────────────────────────────────────────────────
@@ -100,7 +101,8 @@ export const reportsApi = {
 
 // ── Chat ─────────────────────────────────────────────────────────────────
 export const chatApi = {
-  send: (message: string) => api.post<ChatResponse>("/api/chat", { message }),
+  send: (message: string, privacy_mode: PrivacyMode = "identified") =>
+    api.post<ChatResponse>("/api/chat", { message, privacy_mode }),
 };
 
 // ── Notifications ────────────────────────────────────────────────────────

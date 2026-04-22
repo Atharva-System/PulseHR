@@ -12,6 +12,7 @@ import {
   UserCheck,
   AlertTriangle,
   Timer,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { TicketDetailSkeleton } from "@/components/shared/Skeleton";
@@ -169,6 +170,12 @@ export default function TicketDetailPage() {
 
   const slaStatus = getSlaStatus();
   const slaConfig = slaStatus ? slaStatusConfig[slaStatus] : null;
+  const isProtectedIdentity = ticket.privacy_mode !== "identified";
+  const privacyLabel =
+    ticket.privacy_mode.charAt(0).toUpperCase() + ticket.privacy_mode.slice(1);
+  const isAnonymous = ticket.privacy_mode === "anonymous";
+  const isConfidential = ticket.privacy_mode === "confidential";
+  const isAdmin = user?.role === "higher_authority";
 
   return (
     <div className="space-y-6">
@@ -194,6 +201,10 @@ export default function TicketDetailPage() {
             <div className="mt-3 flex flex-wrap gap-3">
               <SeverityBadge severity={ticket.severity} />
               <StatusBadge status={ticket.status} />
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                <Shield size={12} />
+                {privacyLabel}
+              </span>
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock size={12} />
                 {formatDate(ticket.created_at)}
@@ -232,11 +243,36 @@ export default function TicketDetailPage() {
         </div>
 
         {/* Details grid */}
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
-            <p className="text-xs font-medium text-muted-foreground">User</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              Reporter
+            </p>
             <p className="mt-1 text-sm font-medium text-foreground">
               {ticket.user_id || "—"}
+            </p>
+            {isProtectedIdentity && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Identity is protected by privacy mode.
+              </p>
+            )}
+          </div>
+          {ticket.complaint_target && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">
+                Complaint About
+              </p>
+              <p className="mt-1 text-sm font-semibold text-orange-600">
+                {ticket.complaint_target}
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">
+              Privacy Mode
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {privacyLabel}
             </p>
           </div>
           <div>
@@ -287,18 +323,45 @@ export default function TicketDetailPage() {
       </div>
 
       {/* View Conversation Button */}
-      {ticket.conversations.length > 0 && ticket.user_id && (
+      {ticket.conversations.length > 0 &&
+        ticket.user_id &&
+        !isProtectedIdentity && (
+          <button
+            onClick={() =>
+              navigate(
+                `${basePath}/chats?user=${encodeURIComponent(ticket.user_id)}`,
+              )
+            }
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
+          >
+            <MessageSquare size={16} />
+            View Conversation
+          </button>
+        )}
+      {/* Admin can view confidential conversations */}
+      {ticket.conversations.length > 0 && isConfidential && isAdmin && (
         <button
           onClick={() =>
             navigate(
               `${basePath}/chats?user=${encodeURIComponent(ticket.user_id)}`,
             )
           }
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors"
         >
-          <MessageSquare size={16} />
-          View Conversation
+          <Shield size={16} />
+          View Confidential Conversation
         </button>
+      )}
+      {isConfidential && !isAdmin && (
+        <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/30 px-4 py-3 text-sm text-amber-700">
+          🔒 This ticket is confidential. Chat content is only visible to senior
+          authority.
+        </div>
+      )}
+      {isAnonymous && (
+        <div className="rounded-lg border border-dashed border-violet-300 bg-violet-50/30 px-4 py-3 text-sm text-violet-700">
+          🕶️ This ticket is anonymous. Chat content is hidden from everyone.
+        </div>
       )}
 
       {/* Internal Notes / Comments */}

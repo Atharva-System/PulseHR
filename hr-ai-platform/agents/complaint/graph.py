@@ -289,8 +289,9 @@ def check_completeness_node(state: HRState) -> dict:
         }
 
     # Hard safeguard: after enough exchanges, force CONFIRMING (never loop forever)
-    # Critical/high severity → faster (2 exchanges), low/medium → 3 exchanges
-    max_exchanges = 2 if severity in ("critical", "high") else 3
+    # Give at least 3 exchanges for all severities so the bot has time to ask
+    # for the person's name, what happened, and when.
+    max_exchanges = 3 if severity in ("critical", "high") else 4
     if exchange_count >= max_exchanges:
         logger.info(f"[{trace_id}] {exchange_count} exchanges reached (max={max_exchanges}) → forcing CONFIRMING")
         return {
@@ -425,7 +426,12 @@ def ask_confirmation_node(state: HRState) -> dict:
 
 
 def generate_summary_node(state: HRState) -> dict:
-    """Node: generate a professional summary of the complaint for the ticket."""
+    """Node: generate a professional summary of the complaint for the ticket.
+
+    Also extracts the complaint_target (who the complaint is about).
+    """
+    import json as _json
+
     trace_id = state.get("trace_id", "N/A")
     logger.info(f"[{trace_id}] Generating complaint summary for ticket")
 
@@ -443,15 +449,98 @@ def generate_summary_node(state: HRState) -> dict:
         llm = get_llm()
         prompt = TICKET_SUMMARY_PROMPT.format(conversation_history=full_history)
         ai_message = llm.invoke(prompt)
-        summary = ai_message.content.strip()
-        logger.info(f"[{trace_id}] Summary generated ({len(summary)} chars)")
+        raw_text = ai_message.content.strip()
+        logger.info(f"[{trace_id}] Summary raw response ({len(raw_text)} chars)")
 
-        return {
+        # Try to parse JSON; fall back to raw text
+        summary = raw_text
+        complaint_target = ""
+        try:
+            # Strip markdown fences if present
+            cleaned = raw_text
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned.rsplit("```", 1)[0]
+            # Also try to find JSON object within the text
+            import re as _re
+            json_match = _re.search(r'\{[^{}]*"summary"[^{}]*\}', cleaned, _re.DOTALL)
+            if json_match:
+                cleaned = json_match.group(0)
+            parsed = _json.loads(cleaned.strip())
+            summary = parsed.get("summary", raw_text)
+            complaint_target = parsed.get("complaint_target", "")
+        except (_json.JSONDecodeError, AttributeError):
+            logger.warning(f"[{trace_id}] Could not parse summary JSON, using raw text")
+
+        # Fallback: if complaint_target is empty or just a role, try to extract
+        # the name from conversation history using simple heuristics
+        if not complaint_target or complaint_target.lower() in (
+            "manager", "colleague", "hr", "hr rep", "supervisor", "team lead",
+        ):
+            import re as _re
+            # Look for names in employee messages from the full history
+            # Pattern: capitalize words that look like names (after context clues)
+            for pattern in [
+                r"(?:name is|named|called|it'?s|about|from)\s+([A-Z][a-z]+(?:\s+(?:from|in|of)\s+\w+)?)",
+                r"([A-Z][a-z]{2,})\s+(?:from|in|of)\s+([A-Za-z]+)",
+            ]:
+                match = _re.search(pattern, full_history)
+                if match:
+                    extracted = match.group(0)
+                    # Clean up the extracted text
+                    for prefix in ["name is ", "named ", "called ", "it's ", "about ", "from "]:
+                        if extracted.lower().startswith(prefix):
+                            extracted = extracted[len(prefix):]
+                    complaint_target = extracted.strip()
+                    logger.info(f"[{trace_id}] Fallback extracted complaint_target: {complaint_target}")
+                    break
+
+        # --- Auto-escalate if complaint is about HR staff ---
+        from utils.privacy import is_complaint_about_hr
+        privacy_override = {}
+        if is_complaint_about_hr(complaint_target):
+            current_privacy = state.get("privacy_mode", "identified")
+            if current_privacy == "identified":
+                logger.info(
+                    f"[{trace_id}] Complaint target '{complaint_target}' is HR staff "
+                    f"— auto-upgrading privacy from '{current_privacy}' to 'confidential'"
+                )
+                privacy_override = {
+                    "privacy_mode": "confidential",
+                    "metadata": {
+                        **metadata,
+                        "_ticket_summary": summary,
+                        "_hr_auto_escalated": True,
+                    },
+                }
+
+        # Send email to admin immediately when complaint is about HR
+        if is_complaint_about_hr(complaint_target):
+            try:
+                from escalation.notifier import notify_authority_hr_complaint
+                notify_authority_hr_complaint(
+                    complaint_summary=summary,
+                    severity=state.get("severity", "medium"),
+                    complaint_target=complaint_target,
+                    user_id=state.get("user_id", ""),
+                )
+                logger.info(f"[{trace_id}] Admin notified via email — HR-targeted complaint")
+            except Exception as _email_err:
+                logger.error(f"[{trace_id}] Failed to send admin HR-conflict email: {_email_err}")
+
+        result = {
+            "complaint_target": complaint_target,
             "metadata": {
                 **metadata,
                 "_ticket_summary": summary,
-            }
+            },
         }
+        # Merge in any privacy override
+        if privacy_override:
+            result.update(privacy_override)
+        return result
+
     except Exception as e:
         logger.error(f"[{trace_id}] Error generating summary: {e}")
         return {
@@ -515,19 +604,44 @@ def enrich_response_node(state: HRState) -> dict:
     ticket_id = metadata.get("ticket_id", "")
     escalation_action = state.get("escalation_action", "")
     response = state.get("response", "")
+    privacy_mode = state.get("privacy_mode", "identified")
 
     if ticket_id and escalation_action in ("create_ticket", "notify_hr"):
         severity = state.get("severity", "medium")
         severity_label = severity.upper()
         severity_emoji = {"low": "🟢", "medium": "🟡", "high": "🟠", "critical": "🔴"}.get(severity, "🟡")
+        complaint_target = state.get("complaint_target", "")
+        hr_auto_escalated = metadata.get("_hr_auto_escalated", False)
+        privacy_note = ""
+        if hr_auto_escalated:
+            privacy_note = (
+                "\n\n🛡️ Since your complaint involves HR staff, we've automatically "
+                "upgraded your privacy to **confidential mode**. Your identity will be "
+                "hidden from HR and only visible to higher authority."
+            )
+        elif privacy_mode == "confidential":
+            privacy_note = (
+                "\n\n🔒 Your identity will be hidden from standard HR views and "
+                "only visible to higher authority when needed."
+            )
+        elif privacy_mode == "anonymous":
+            privacy_note = (
+                "\n\n🕶️ Your ticket will be filed in anonymous mode so your name is "
+                "not shown in HR review screens."
+            )
+        target_line = ""
+        if complaint_target:
+            target_line = f"**Complaint About:** {complaint_target}\n\n"
         ticket_notice = (
             f"\n\n---\n\n"
             f"### ✅ Your Complaint Has Been Registered\n\n"
             f"**Ticket ID:** `{ticket_id}`\n\n"
+            f"{target_line}"
             f"**Priority:** {severity_emoji} {severity_label}\n\n"
             f"**Status:** 🔵 Open\n\n"
             f"> 💬 *An HR representative has been notified and will reach out to you shortly. "
-            f"Your privacy and confidentiality are our top priority.*\n\n"
+            f"Your privacy and confidentiality are our top priority.*"
+            f"{privacy_note}\n\n"
             f"📋 You can track your ticket status anytime from the **My Tickets** page."
         )
         response += ticket_notice
@@ -551,6 +665,7 @@ def save_to_memory_node(state: HRState) -> dict:
             emotion=state.get("emotion", ""),
             severity=state.get("severity", ""),
             agent_used=state.get("agent_used", "complaint_agent"),
+            privacy_mode=state.get("privacy_mode", "identified"),
             trace_id=trace_id,
         )
         store.save_conversation(entry)

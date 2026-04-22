@@ -13,6 +13,7 @@ class HRState(TypedDict, total=False):
     # --- Core request data ---
     user_id: str
     message: str
+    privacy_mode: str
 
     # --- Router output ---
     intent: str
@@ -22,6 +23,7 @@ class HRState(TypedDict, total=False):
     emotion: str
     severity: str
     complaint_type: str
+    complaint_target: str
 
     # --- Agent output ---
     response: str

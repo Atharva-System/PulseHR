@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { agentsApi } from "@/api/services";
+import { useState } from "react";
+import { useAgents, useToggleAgent } from "@/hooks/useQueries";
 import type { AgentConfig } from "@/types";
 import {
   Bot,
@@ -23,33 +23,20 @@ const AGENT_ICONS: Record<string, React.ReactNode> = {
 };
 
 export default function AgentManagementPage() {
-  const [agents, setAgents] = useState<AgentConfig[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const fetchAgents = async () => {
-    try {
-      const { data } = await agentsApi.list();
-      setAgents(data);
-      setError("");
-    } catch {
-      setError("Failed to load agents");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAgents();
-  }, []);
+  const { data: agents = [], isLoading: loading } = useAgents();
+  const toggleMutation = useToggleAgent();
 
   const handleToggle = async (agent: AgentConfig) => {
     if (agent.id === "default_agent") return;
     setTogglingId(agent.id);
     try {
-      const { data } = await agentsApi.toggle(agent.id, !agent.is_active);
-      setAgents((prev) => prev.map((a) => (a.id === data.id ? data : a)));
+      await toggleMutation.mutateAsync({
+        id: agent.id,
+        is_active: !agent.is_active,
+      });
       setError("");
     } catch (err: unknown) {
       const msg =

@@ -13,6 +13,7 @@ from escalation.notifier import _build_html_email
 from skills.communication.email import send_email
 from utils.helpers import generate_id
 from utils.logger import get_logger
+from utils.privacy import redact_reporter_label, can_view_chat_content
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,8 @@ class TicketResponse(BaseModel):
     title: str
     description: str
     severity: str
+    privacy_mode: str
+    complaint_target: str = ""
     assignee: str
     assignee_id: Optional[str] = None
     status: str
@@ -89,20 +92,24 @@ class TicketStatsResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _ticket_to_dict(t: TicketModel) -> dict:
+def _ticket_to_dict(t: TicketModel, viewer_role: str) -> dict:
     now = datetime.now(timezone.utc)
     sla_breached = t.sla_breached or False
     if t.sla_deadline and t.status in ("open", "in_progress") and now > t.sla_deadline:
         sla_breached = True
+
+    privacy_mode = t.privacy_mode or "identified"
     return {
         "ticket_id": t.ticket_id,
         "title": t.title,
         "description": t.description or "",
         "severity": t.severity or "",
+        "privacy_mode": privacy_mode,
+        "complaint_target": getattr(t, "complaint_target", "") or "",
         "assignee": t.assignee or "",
         "assignee_id": t.assignee_id or None,
         "status": t.status or "",
-        "user_id": t.user_id or "",
+        "user_id": redact_reporter_label(t.user_id or "", privacy_mode, viewer_role),
         "trace_id": t.trace_id or "",
         "sla_deadline": t.sla_deadline.isoformat() if t.sla_deadline else None,
         "sla_breached": sla_breached,
@@ -127,6 +134,8 @@ async def list_tickets(
     current_user: UserModel = Depends(require_hr),
 ):
     """List all tickets with optional filters and pagination."""
+    from utils.privacy import is_complaint_about_hr
+
     session = get_db_session()
     try:
         q = session.query(TicketModel)
@@ -148,7 +157,20 @@ async def list_tickets(
             .limit(page_size)
             .all()
         )
-        return [TicketResponse(**_ticket_to_dict(t)) for t in tickets]
+
+        # --- Hide tickets about HR staff from HR viewers ---
+        # Only higher_authority (admin) can see complaints targeting HR people
+        result = []
+        for t in tickets:
+            target = getattr(t, "complaint_target", "") or ""
+            if current_user.role == "hr" and target and is_complaint_about_hr(target):
+                logger.info(
+                    f"Hiding ticket {t.ticket_id} from HR viewer — "
+                    f"complaint targets HR staff: {target}"
+                )
+                continue
+            result.append(TicketResponse(**_ticket_to_dict(t, current_user.role)))
+        return result
     finally:
         session.close()
 
@@ -200,11 +222,21 @@ async def get_ticket(
     current_user: UserModel = Depends(require_hr),
 ):
     """Get a single ticket with related conversations, audit trail, and comments."""
+    from utils.privacy import is_complaint_about_hr
+
     session = get_db_session()
     try:
         ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
+
+        # Block HR from viewing tickets that target HR staff
+        target = getattr(ticket, "complaint_target", "") or ""
+        if current_user.role == "hr" and target and is_complaint_about_hr(target):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is restricted — only higher authority can view it",
+            )
 
         # Related conversations (by trace_id or user_id)
         convs = []
@@ -218,9 +250,21 @@ async def get_ticket(
             convs = [
                 {
                     "entry_id": c.entry_id,
-                    "user_id": c.user_id,
-                    "message": c.message,
-                    "response": c.response,
+                    "user_id": redact_reporter_label(
+                        c.user_id,
+                        ticket.privacy_mode or "identified",
+                        current_user.role,
+                    ),
+                    "message": (
+                        c.message
+                        if can_view_chat_content(ticket.privacy_mode or "identified", current_user.role)
+                        else "[Content hidden — privacy protected]"
+                    ),
+                    "response": (
+                        c.response
+                        if can_view_chat_content(ticket.privacy_mode or "identified", current_user.role)
+                        else "[Content hidden — privacy protected]"
+                    ),
                     "intent": c.intent,
                     "agent_used": c.agent_used,
                     "timestamp": c.timestamp.isoformat() if c.timestamp else None,
@@ -266,7 +310,7 @@ async def get_ticket(
             for c in comment_rows
         ]
 
-        data = _ticket_to_dict(ticket)
+        data = _ticket_to_dict(ticket, current_user.role)
         data["conversations"] = convs
         data["audit_trail"] = audit
         data["comments"] = comments
@@ -407,13 +451,19 @@ async def assign_ticket(
 
         # Send email notification to the assigned person
         try:
+            reporter_label = redact_reporter_label(
+                ticket.user_id or "",
+                ticket.privacy_mode or "identified",
+                assignee.role,
+            )
             assignment_summary = (
                 f"You have been assigned a new ticket.\n\n"
                 f"Ticket ID: {ticket.ticket_id}\n"
                 f"Title: {ticket.title}\n"
                 f"Severity: {ticket.severity}\n"
                 f"Status: {ticket.status}\n"
-                f"Reported by: {ticket.user_id}\n"
+                f"Privacy Mode: {ticket.privacy_mode or 'identified'}\n"
+                f"Reported by: {reporter_label}\n"
                 f"Assigned by: {current_user.full_name or current_user.username}"
             )
             email_body = _build_html_email(assignment_summary, ticket.severity)
@@ -464,6 +514,6 @@ async def sla_breached_tickets(
             .order_by(TicketModel.sla_deadline.asc())
             .all()
         )
-        return [_ticket_to_dict(t) for t in tickets]
+        return [_ticket_to_dict(t, current_user.role) for t in tickets]
     finally:
         session.close()

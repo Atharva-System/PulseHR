@@ -48,6 +48,30 @@ def create_app() -> FastAPI:
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
                         "receive_notifications BOOLEAN DEFAULT FALSE"
                     ))
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                        "notification_levels VARCHAR(200) DEFAULT 'critical,high,medium,low'"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS "
+                        "privacy_mode VARCHAR(20) DEFAULT 'identified'"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
+                        "privacy_mode VARCHAR(20) DEFAULT 'identified'"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "
+                        "privacy_mode VARCHAR(20) DEFAULT 'identified'"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "
+                        "complaint_target VARCHAR(200) DEFAULT ''"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
+                        "complaint_target VARCHAR(200) DEFAULT ''"
+                    ))
                     conn.commit()
                 except Exception as e:
                     logger.warning("Column migration skipped: %s", e)

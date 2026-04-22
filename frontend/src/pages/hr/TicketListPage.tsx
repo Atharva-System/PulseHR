@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ticketsApi } from "@/api/services";
+import { useTickets } from "@/hooks/useQueries";
 import type { Ticket } from "@/types";
 import { SeverityBadge, StatusBadge } from "@/components/shared/Badges";
 import { formatDate } from "@/lib/utils";
@@ -20,8 +21,6 @@ const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 export default function TicketListPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const [severity, setSeverity] = useState("");
   const [search, setSearch] = useState("");
@@ -29,33 +28,21 @@ export default function TicketListPage() {
 
   const basePath = user?.role === "higher_authority" ? "/admin" : "/hr";
 
-  const fetchTickets = () => {
-    setLoading(true);
-    ticketsApi
-      .list({
-        status: activeTab === "all" ? undefined : activeTab,
-        severity: severity || undefined,
-        page_size: 200,
-      })
-      .then((res) => setTickets(res.data))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchTickets();
-  }, [activeTab, severity]);
+  const {
+    data: tickets = [],
+    isLoading: loading,
+    refetch,
+  } = useTickets({
+    status: activeTab === "all" ? undefined : activeTab,
+    severity: severity || undefined,
+    page_size: 200,
+  });
 
   const handleStatusUpdate = async (ticketId: string, newStatus: string) => {
     setUpdatingId(ticketId);
     try {
       await ticketsApi.updateStatus(ticketId, newStatus);
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.ticket_id === ticketId
-            ? { ...t, status: newStatus, updated_at: new Date().toISOString() }
-            : t,
-        ),
-      );
+      refetch();
     } finally {
       setUpdatingId(null);
     }

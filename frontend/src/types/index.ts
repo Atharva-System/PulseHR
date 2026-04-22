@@ -1,3 +1,5 @@
+export type PrivacyMode = "identified" | "confidential" | "anonymous";
+
 export interface User {
   id: string;
   username: string;
@@ -6,6 +8,7 @@ export interface User {
   role: "user" | "hr" | "higher_authority";
   is_active: boolean;
   receive_notifications: boolean;
+  notification_levels: string[];
   created_by: string | null;
   last_login: string | null;
   previous_login: string | null;
@@ -25,6 +28,8 @@ export interface Ticket {
   title: string;
   description: string;
   severity: string;
+  privacy_mode: PrivacyMode;
+  complaint_target: string;
   assignee: string;
   assignee_id: string | null;
   status: string;
@@ -61,6 +66,7 @@ export interface AuditEntry {
 export interface Conversation {
   entry_id: string;
   user_id: string;
+  privacy_mode: PrivacyMode;
   message: string;
   response: string;
   intent: string;
@@ -73,6 +79,8 @@ export interface Conversation {
 
 export interface ConversationUser {
   user_id: string;
+  lookup_user_id?: string | null;
+  privacy_mode: PrivacyMode;
   message_count: number;
   last_message_at: string | null;
 }
@@ -172,6 +180,7 @@ export interface MyTicket {
   title: string;
   description: string;
   severity: string;
+  privacy_mode: PrivacyMode;
   status: string;
   created_at: string | null;
   updated_at: string | null;

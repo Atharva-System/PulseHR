@@ -107,10 +107,26 @@ LATEST MESSAGE FROM EMPLOYEE:
 
 INFORMATION CHECKLIST — a good complaint ticket needs:
 1. What happened (the core issue / specific incident described in detail)
-2. When it happened (approximate dates/times or frequency)
-3. Who was involved (names, roles, or descriptions of the people)
-4. Any witnesses or evidence mentioned (optional but helpful)
+2. Who is this complaint about? (the person's NAME — first name is enough if
+   combined with a role or department, e.g. "Rajesh from Operations",
+   "Manager Priya", "colleague Arjun". A generic role ALONE like "my manager"
+   without any name is NOT enough.)
+3. When it happened (approximate dates/times or frequency)
+4. Who else was involved or witnessed it (optional but helpful)
 5. How it's affecting the employee (emotional / work impact)
+
+**CRITICAL RULE — PERSON'S NAME IS MANDATORY:**
+If the employee has NOT provided ANY name for the person the complaint is about,
+the status MUST be "GATHERING" with "person's name" in missing_info.
+A role alone ("my manager") without a name is NOT sufficient.
+However, a first name WITH a role or department IS sufficient — do NOT ask for
+a "full name" if the employee already gave a first name + context (e.g.
+"Rajesh from Operations" or "Manager Priya" is perfectly fine).
+
+**CRITICAL RULE — DO NOT RE-ASK ALREADY PROVIDED INFO:**
+Read the ENTIRE conversation carefully. If the employee already provided a piece
+of information in a PREVIOUS message, do NOT list it as missing. Only list what
+is genuinely not yet mentioned anywhere in the conversation.
 
 **CRITICAL RULE — FIRST MESSAGE:**
 If the conversation history says "(This is the first message)" or is empty,
@@ -122,9 +138,9 @@ DECISION RULES (apply ONLY when there is prior conversation history):
 - If the employee has clearly said something like "that's all", "nothing more",
   "I've told you everything", "please proceed", "go ahead", "create the ticket",
   "file it", or similar → mark as COMPLETE even if some details are missing.
-- If the employee has provided at least 3 of the 5 checklist items AND there
-  have been at least 2 exchanges → mark as COMPLETE.
-- If the conversation has been going for 3+ exchanges already → lean toward COMPLETE.
+- If the employee has provided the person's NAME plus at least 2 other checklist
+  items AND there have been at least 2 exchanges → mark as COMPLETE.
+- If the conversation has been going for 4+ exchanges already → COMPLETE.
 - Otherwise → mark as GATHERING.
 
 Return a JSON object:
@@ -152,17 +168,22 @@ SEVERITY: {severity}
 RULES:
 1. Keep your response to 2-3 sentences MAX.
 2. First, briefly acknowledge what they shared — show you heard them (half a sentence).
-3. Then ask ONE specific, focused question about what's still missing.
-4. Prioritise these questions in order:
-   a. What exactly happened? (the specific incident / behaviour)
-   b. When did it happen? (date, time, frequency)
-   c. Who was involved? (names, roles, department)
+3. Then ask ONE specific, focused question about what's STILL MISSING.
+4. **NEVER re-ask for information the employee already provided.** Read the full
+   conversation history carefully. If they already gave a name like "Rajesh from
+   Operations", do NOT ask for the name again — move on to the next missing item.
+5. Prioritise these questions in this order (skip any already answered):
+   a. Who is this complaint about? (only if NO name was given yet — a first name
+      with role/department like "Rajesh from Operations" is sufficient, do NOT
+      ask for a "full name" if they already gave a first name + context)
+   b. What exactly happened? (the specific incident / behaviour)
+   c. When did it happen? (date, time, frequency)
    d. Were there any witnesses or evidence? (people, emails, messages)
    e. How is this affecting you? (work impact, emotional impact)
-5. Be warm but professional — sound like a real HR colleague, not a bot.
-6. NEVER mention "ticket", "case", "filing", or "report".
-7. Don't start with "I'm sorry" or "Thank you for sharing" every time — vary your tone.
-8. For CRITICAL / HIGH severity: acknowledge the seriousness immediately
+6. Be warm but professional — sound like a real HR colleague, not a bot.
+7. NEVER mention "ticket", "case", "filing", or "report".
+8. Don't start with "I'm sorry" or "Thank you for sharing" every time — vary your tone.
+9. For CRITICAL / HIGH severity: acknowledge the seriousness immediately
    (e.g., "That's a very serious concern") but still ask for specifics.
 
 Respond:
@@ -179,11 +200,11 @@ LATEST MESSAGE:
 {message}
 
 RULES:
-1. In ONE sentence, summarize the key point of their concern
-2. Ask if there's anything else they'd like to add before you take this forward
-3. Keep the ENTIRE response to 2 sentences MAX
-4. Do NOT mention "ticket", "case number", or "filing"
-5. Sound natural, not scripted
+1. In ONE sentence, briefly summarize: who the complaint is about, and what happened.
+2. Ask if there's anything else they'd like to add before you take this forward.
+3. Keep the ENTIRE response to 2 sentences MAX.
+4. Do NOT mention "ticket", "case number", or "filing".
+5. Sound natural, not scripted.
 
 Respond:
 """
@@ -194,10 +215,26 @@ You are an HR assistant preparing a formal complaint summary.
 FULL CONVERSATION:
 {conversation_history}
 
+TASK 1 — SUMMARY:
 Create a concise but thorough description of the complaint for the HR ticket.
 Include: what happened, when, who was involved, and how it affects the employee.
 Write it in third person (e.g., "The employee reports that...").
 Keep it factual and professional. 2–4 sentences max.
+
+TASK 2 — COMPLAINT TARGET:
+Extract the EXACT name (and role/department if given) of the PERSON the complaint
+is about. Read the conversation carefully — the employee usually states the name
+when asked. Examples:
+  - Employee said "Rajesh from Operations" → complaint_target = "Rajesh from Operations"
+  - Employee said "my manager Priya" → complaint_target = "Manager Priya"
+  - Employee said "Arjun" → complaint_target = "Arjun"
+USE THE EXACT NAME THE EMPLOYEE GAVE. Do NOT generalize to just "Manager" or
+"colleague" if a name was provided.
+
+Return ONLY a valid JSON object with exactly two keys:
+{{"summary": "...", "complaint_target": "..."}}
+
+If no name was mentioned at all, use an empty string for complaint_target.
 """
 
 # ---------------------------------------------------------------------------
