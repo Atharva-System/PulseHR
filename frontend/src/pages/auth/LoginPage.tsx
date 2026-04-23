@@ -36,11 +36,16 @@ export default function LoginPage() {
   const DEMO_ACCOUNTS = [
     {
       label: "Employee",
-      username: "user@1",
+      username: "ved@123",
       password: "1234",
       color: "#2563eb",
     },
-    { label: "HR Admin", username: "hr@1", password: "1234", color: "#7c3aed" },
+    {
+      label: "HR Admin",
+      username: "poonam@123",
+      password: "1234",
+      color: "#7c3aed",
+    },
     {
       label: "Senior Authority",
       username: "ceo@1",
