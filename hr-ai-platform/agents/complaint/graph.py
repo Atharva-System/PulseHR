@@ -515,19 +515,10 @@ def generate_summary_node(state: HRState) -> dict:
                     },
                 }
 
-        # Send email to admin immediately when complaint is about HR
+        # NOTE: For HR-targeted complaints, admin notification now happens in
+        # handle_escalation() AFTER the ticket is created, so ticket_id is included.
         if is_complaint_about_hr(complaint_target):
-            try:
-                from escalation.notifier import notify_authority_hr_complaint
-                notify_authority_hr_complaint(
-                    complaint_summary=summary,
-                    severity=state.get("severity", "medium"),
-                    complaint_target=complaint_target,
-                    user_id=state.get("user_id", ""),
-                )
-                logger.info(f"[{trace_id}] Admin notified via email — HR-targeted complaint")
-            except Exception as _email_err:
-                logger.error(f"[{trace_id}] Failed to send admin HR-conflict email: {_email_err}")
+            logger.info(f"[{trace_id}] HR-targeted complaint detected — admin will be notified during escalation")
 
         result = {
             "complaint_target": complaint_target,
