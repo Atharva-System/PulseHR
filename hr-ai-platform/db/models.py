@@ -64,7 +64,7 @@ class UserModel(Base):
             "role": self.role,
             "is_active": self.is_active,
             "receive_notifications": self.receive_notifications or False,
-            "notification_levels": (self.notification_levels or "critical,high,medium,low").split(","),
+            "notification_levels": [l for l in (self.notification_levels or "").split(",") if l],
             "created_by": self.created_by,
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "previous_login": self.previous_login.isoformat() if self.previous_login else None,

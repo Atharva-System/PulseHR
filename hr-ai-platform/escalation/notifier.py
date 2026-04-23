@@ -47,8 +47,7 @@ def _get_notification_recipients(role: str = "hr", severity: str = "") -> List[R
             sev_lower = severity.strip().lower()
             filtered = []
             for u in users:
-                levels = (getattr(u, "notification_levels", None) or "critical,high,medium,low").split(",")
-                levels = [l.strip().lower() for l in levels]
+                levels = [l.strip().lower() for l in (getattr(u, "notification_levels", None) or "").split(",") if l.strip()]
                 if sev_lower in levels:
                     filtered.append(u)
             users = filtered
