@@ -1,15 +1,13 @@
-"""Notifications API — new tickets/events since the user's last login."""
+"""Notifications API — persistent in-app notifications from app_notifications table."""
 
 from typing import Optional
-from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func
 
 from app.auth import require_hr
 from db.connection import get_db_session
-from db.models import TicketModel, AuditLogModel, UserModel
+from db.models import AppNotificationModel, UserModel
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +21,7 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 class NotificationItem(BaseModel):
     id: str
-    type: str          # "new_ticket" | "status_change" | "high_severity"
+    type: str          # "new_ticket" | "status_change" | "high_severity" | "escalation"
     title: str
     message: str
     severity: Optional[str] = None
@@ -35,16 +33,7 @@ class NotificationItem(BaseModel):
 class NotificationsResponse(BaseModel):
     total: int
     unread: int
-    since: Optional[str] = None
     notifications: list[NotificationItem]
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _severity_label(sev: str) -> str:
-    return {"critical": "🔴 Critical", "high": "🟠 High", "medium": "🟡 Medium", "low": "🟢 Low"}.get(sev, sev)
 
 
 # ---------------------------------------------------------------------------
@@ -54,69 +43,84 @@ def _severity_label(sev: str) -> str:
 @router.get("", response_model=NotificationsResponse)
 async def get_notifications(
     current_user: UserModel = Depends(require_hr),
+    limit: int = Query(50, ge=1, le=200),
 ):
     """
-    Returns notifications for HR/Authority users.
-    Shows new tickets and status changes since the user's *previous* login.
-    If no previous login, shows the last 24 hours.
+    Returns the latest in-app notifications for the current HR/Authority user,
+    read from the app_notifications table.
     """
-    # Use previous_login (the login before the current session) so the user
-    # sees everything that happened while they were away.
-    since = current_user.previous_login
-    if since is None:
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
-
     session = get_db_session()
     try:
-        notifications: list[NotificationItem] = []
-
-        # ── 1. New tickets created since last login ──────────────────────
-        new_tickets = (
-            session.query(TicketModel)
-            .filter(TicketModel.created_at >= since)
-            .order_by(TicketModel.created_at.desc())
+        rows = (
+            session.query(AppNotificationModel)
+            .filter(AppNotificationModel.user_id == current_user.id)
+            .order_by(AppNotificationModel.created_at.desc())
+            .limit(limit)
             .all()
         )
-        for t in new_tickets:
-            is_urgent = t.severity in ("high", "critical")
-            notifications.append(NotificationItem(
-                id=f"nt-{t.ticket_id}",
-                type="high_severity" if is_urgent else "new_ticket",
-                title=f"{'⚠️ Urgent: ' if is_urgent else ''}New Ticket — {t.title}",
-                message=f"{_severity_label(t.severity)} complaint from {t.user_id}",
-                severity=t.severity,
-                ticket_id=t.ticket_id,
-                timestamp=t.created_at.isoformat() if t.created_at else "",
-            ))
 
-        # ── 2. Status changes (audit log) since last login ──────────────
-        status_events = (
-            session.query(AuditLogModel)
-            .filter(
-                AuditLogModel.timestamp >= since,
-                AuditLogModel.event_type.in_(["status_changed", "ticket_resolved", "ticket_closed"]),
+        notifications = [
+            NotificationItem(
+                id=str(r.id),
+                type=r.type,
+                title=r.title,
+                message=r.message or "",
+                severity=r.severity,
+                ticket_id=r.ticket_id,
+                timestamp=r.created_at.isoformat() if r.created_at else "",
+                is_read=r.is_read,
             )
-            .order_by(AuditLogModel.timestamp.desc())
-            .all()
-        )
-        for a in status_events:
-            notifications.append(NotificationItem(
-                id=f"na-{a.id}",
-                type="status_change",
-                title="Ticket Status Updated",
-                message=a.details or "A ticket status was changed",
-                ticket_id=a.trace_id,
-                timestamp=a.timestamp.isoformat() if a.timestamp else "",
-            ))
+            for r in rows
+        ]
 
-        # Sort all notifications by timestamp descending
-        notifications.sort(key=lambda n: n.timestamp, reverse=True)
+        unread = sum(1 for n in notifications if not n.is_read)
 
         return NotificationsResponse(
             total=len(notifications),
-            unread=len(notifications),  # all are "unread" since last login
-            since=since.isoformat(),
+            unread=unread,
             notifications=notifications,
         )
+    finally:
+        session.close()
+
+
+@router.patch("/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: UserModel = Depends(require_hr),
+):
+    """Mark a single notification as read."""
+    session = get_db_session()
+    try:
+        row = (
+            session.query(AppNotificationModel)
+            .filter(
+                AppNotificationModel.id == notification_id,
+                AppNotificationModel.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        row.is_read = True
+        session.commit()
+        return {"status": "ok"}
+    finally:
+        session.close()
+
+
+@router.patch("/read-all")
+async def mark_all_notifications_read(
+    current_user: UserModel = Depends(require_hr),
+):
+    """Mark all notifications for this user as read."""
+    session = get_db_session()
+    try:
+        session.query(AppNotificationModel).filter(
+            AppNotificationModel.user_id == current_user.id,
+            AppNotificationModel.is_read == False,  # noqa: E712
+        ).update({"is_read": True})
+        session.commit()
+        return {"status": "ok"}
     finally:
         session.close()

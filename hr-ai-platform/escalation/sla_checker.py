@@ -60,7 +60,7 @@ def _check_and_escalate():
 
                 # For critical/high — also notify Higher Authority
                 if ticket.severity in ("critical", "high"):
-                    notify_authority(summary, ticket.severity)
+                    notify_authority(summary, ticket.severity, ticket_id=str(ticket.ticket_id))
                     logger.warning(
                         f"SLA BREACH (ESCALATED TO AUTHORITY): {ticket.ticket_id} — "
                         f"severity={ticket.severity}, {overdue_hours}h overdue"

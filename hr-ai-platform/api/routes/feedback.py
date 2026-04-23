@@ -92,6 +92,7 @@ async def submit_feedback(
                     f"Comment: {body.comment or '(no comment)'}\n\n"
                     f"The ticket has been re-opened automatically. Please review.",
                     severity=ticket.severity or "high",
+                    ticket_id=str(body.ticket_id),
                 )
                 logger.info(f"Bad review escalation email sent for ticket {body.ticket_id}")
             except Exception as esc_err:

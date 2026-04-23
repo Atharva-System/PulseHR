@@ -1,25 +1,36 @@
-"""Escalation: notify HR personnel of urgent matters via SMTP email."""
+"""Escalation: notify HR / authority via email AND in-app notifications.
 
+Recipients and their email addresses come from the DB (users table).
+Each user's notification_levels control which severities they receive.
+Both email and in-app notification are created per-recipient.
+"""
+
+import uuid
 from datetime import datetime, timezone
-from typing import List
+from typing import List, NamedTuple
 
 from app.config import settings
 from db.connection import get_db_session
-from db.models import UserModel
+from db.models import UserModel, AppNotificationModel
 from skills.communication.email import send_email
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-def _get_notification_recipients(role: str = "hr", severity: str = "") -> List[str]:
-    """Return email addresses of active users for the given role.
+class Recipient(NamedTuple):
+    user_id: str
+    email: str
+    username: str
 
-    If severity is provided, only include users whose notification_levels
-    contain that severity. For HR: also requires receive_notifications=True.
-    For higher_authority: ALL active users (admin must always be reachable),
-      but still filtered by severity level if provided.
-    Falls back to SMTP_TO_HR / SMTP_TO_AUTHORITY env value if no DB users found.
+
+def _get_notification_recipients(role: str = "hr", severity: str = "") -> List[Recipient]:
+    """Return Recipient(user_id, email, username) for active users matching role + severity.
+
+    For HR: requires receive_notifications=True.
+    For higher_authority: always includes all active users of that role.
+    Filters by severity level stored in user's notification_levels.
+    No fallback to env — DB is the source of truth.
     """
     session = get_db_session()
     try:
@@ -27,12 +38,11 @@ def _get_notification_recipients(role: str = "hr", severity: str = "") -> List[s
             UserModel.role == role,
             UserModel.is_active == True,
         )
-        # HR → respect notification preference; authority → always notify
         if role == "hr":
             q = q.filter(UserModel.receive_notifications == True)
         users = q.all()
 
-        # Filter by severity level if specified
+        # Filter by severity level
         if severity:
             sev_lower = severity.strip().lower()
             filtered = []
@@ -43,15 +53,75 @@ def _get_notification_recipients(role: str = "hr", severity: str = "") -> List[s
                     filtered.append(u)
             users = filtered
 
-        emails = [u.email for u in users if u.email]
-        if emails:
-            return emails
+        return [Recipient(user_id=u.id, email=u.email, username=u.username) for u in users if u.email]
     finally:
         session.close()
 
-    # Fallback to env setting
-    fallback = settings.smtp_to_hr if role == "hr" else settings.smtp_to_authority
-    return [fallback] if fallback else []
+
+def _create_in_app_notification(
+    user_id: str,
+    notif_type: str,
+    title: str,
+    message: str,
+    severity: str = "",
+    ticket_id: str = "",
+) -> None:
+    """Insert an in-app notification row for a single user."""
+    session = get_db_session()
+    try:
+        notif = AppNotificationModel(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            type=notif_type,
+            title=title,
+            message=message,
+            severity=severity,
+            ticket_id=ticket_id,
+        )
+        session.add(notif)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.warning(f"Failed to create in-app notification for {user_id}: {e}")
+    finally:
+        session.close()
+
+
+def _notify_recipients(
+    recipients: List[Recipient],
+    subject: str,
+    body: str,
+    notif_type: str,
+    notif_title: str,
+    notif_message: str,
+    severity: str = "",
+    ticket_id: str = "",
+) -> dict:
+    """Send email + create in-app notification for every recipient."""
+    if not recipients:
+        logger.warning("No notification recipients found — skipping")
+        return {"status": "skipped", "reason": "no recipients"}
+
+    emails_sent = []
+    for r in recipients:
+        # In-app notification
+        _create_in_app_notification(
+            user_id=r.user_id,
+            notif_type=notif_type,
+            title=notif_title,
+            message=notif_message,
+            severity=severity,
+            ticket_id=ticket_id,
+        )
+        # Email
+        result = send_email(to=r.email, subject=subject, body=body, html=True)
+        emails_sent.append({"email": r.email, "result": result})
+
+    logger.info(
+        f"Notified {len(recipients)} recipients — "
+        f"emails: {[r.email for r in recipients]}, severity={severity}"
+    )
+    return {"status": "sent", "recipients": [r.email for r in recipients], "results": emails_sent}
 
 
 def _build_html_email(complaint_summary: str, severity: str) -> str:
@@ -135,25 +205,38 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
 
 
 def notify_hr(complaint_summary: str, severity: str) -> dict:
-    """Alert HR team about a complaint that requires immediate attention.
+    """Alert HR team AND authority about a complaint — email + in-app notification.
 
-    Sends a professional HTML email via SMTP to all HR users with
-    receive_notifications enabled. Falls back to SMTP_TO_HR env value.
+    Recipients come from the DB. Both HR and higher_authority users whose
+    notification_levels include the given severity will be notified.
     """
     subject = f"⚠️ HR Alert — {severity.upper()} Severity Complaint Reported"
     body = _build_html_email(complaint_summary, severity)
 
-    recipients = _get_notification_recipients(role="hr", severity=severity)
-    if not recipients:
-        logger.warning("No HR notification recipients found — skipping email")
-        return {"status": "skipped", "reason": "no recipients"}
+    hr_recipients = _get_notification_recipients(role="hr", severity=severity)
+    authority_recipients = _get_notification_recipients(role="higher_authority", severity=severity)
 
-    logger.info(f"Notifying HR ({', '.join(recipients)}) — severity={severity}")
+    # Merge, deduplicate by user_id
+    seen = set()
+    recipients = []
+    for r in hr_recipients + authority_recipients:
+        if r.user_id not in seen:
+            seen.add(r.user_id)
+            recipients.append(r)
 
-    results = []
-    for recipient in recipients:
-        results.append(send_email(to=recipient, subject=subject, body=body, html=True))
-    return {"status": "sent", "recipients": recipients, "results": results}
+    notif_type = "high_severity" if severity in ("critical", "high") else "new_ticket"
+    notif_title = f"{'⚠️ Urgent: ' if severity in ('critical', 'high') else ''}New {severity.upper()} Complaint"
+    notif_message = complaint_summary[:300]
+
+    return _notify_recipients(
+        recipients=recipients,
+        subject=subject,
+        body=body,
+        notif_type=notif_type,
+        notif_title=notif_title,
+        notif_message=notif_message,
+        severity=severity,
+    )
 
 
 def notify_authority_hr_complaint(
@@ -291,43 +374,54 @@ def notify_authority_hr_complaint(
     subject = f"🚨 CONFIDENTIAL — Complaint About HR Staff ({complaint_target}) — Admin Action Required"
     recipients = _get_notification_recipients(role="higher_authority", severity=severity)
     if not recipients:
-        fallback = settings.smtp_to_authority
-        recipients = [fallback] if fallback else []
-    if not recipients:
         logger.warning("No Authority recipients found for HR-conflict escalation")
         return {"status": "skipped", "reason": "no recipients"}
 
+    notif_title = f"🚨 HR Conflict: Complaint about {complaint_target}"
+    notif_message = f"Confidential complaint targeting HR staff ({complaint_target}). {complaint_summary[:200]}"
+
     logger.info(
-        f"Notifying authority ({', '.join(recipients)}) about HR-targeted complaint "
+        f"Notifying authority ({', '.join(r.email for r in recipients)}) about HR-targeted complaint "
         f"target='{complaint_target}' severity={severity}"
     )
-    results = []
-    for recipient in recipients:
-        results.append(send_email(to=recipient, subject=subject, body=body, html=True))
-    return {"status": "sent", "recipients": recipients, "results": results}
+    return _notify_recipients(
+        recipients=recipients,
+        subject=subject,
+        body=body,
+        notif_type="escalation",
+        notif_title=notif_title,
+        notif_message=notif_message,
+        severity=severity,
+        ticket_id=ticket_id,
+    )
 
 
-def notify_authority(complaint_summary: str, severity: str) -> dict:
+def notify_authority(complaint_summary: str, severity: str, ticket_id: str | None = None) -> dict:
     """Alert Higher Authority about a critical/high SLA breach.
 
-    Sends the same professional HTML email to all higher_authority users
-    with receive_notifications enabled. Falls back to SMTP_TO_AUTHORITY env.
+    Sends email + in-app notification to all higher_authority users
+    whose notification_levels include this severity.
     """
     subject = f"🚨 ESCALATION — {severity.upper()} SLA Breach Requires Immediate Attention"
     body = _build_html_email(complaint_summary, severity)
 
     recipients = _get_notification_recipients(role="higher_authority", severity=severity)
     if not recipients:
-        # Final fallback to env setting
-        fallback = settings.smtp_to_authority
-        recipients = [fallback] if fallback else []
-    if not recipients:
-        logger.warning("No Authority notification recipients found — skipping email")
+        logger.warning("No Authority notification recipients found — skipping")
         return {"status": "skipped", "reason": "no recipients"}
 
-    logger.info(f"Notifying Authority ({', '.join(recipients)}) — severity={severity}")
+    notif_title = f"🚨 SLA Breach — {severity.upper()}"
+    notif_message = f"SLA breach escalation: {complaint_summary[:200]}"
 
-    results = []
-    for recipient in recipients:
-        results.append(send_email(to=recipient, subject=subject, body=body, html=True))
-    return {"status": "sent", "recipients": recipients, "results": results}
+    logger.info(f"Notifying Authority ({', '.join(r.email for r in recipients)}) — severity={severity}")
+
+    return _notify_recipients(
+        recipients=recipients,
+        subject=subject,
+        body=body,
+        notif_type="escalation",
+        notif_title=notif_title,
+        notif_message=notif_message,
+        severity=severity,
+        ticket_id=ticket_id,
+    )

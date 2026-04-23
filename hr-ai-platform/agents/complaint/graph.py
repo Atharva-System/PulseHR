@@ -860,6 +860,7 @@ def handle_dissatisfaction_node(state: HRState) -> dict:
             f"Employee's message: {message}\n\n"
             f"The ticket has been re-opened automatically. Please review urgently.",
             severity=ticket_severity or "high",
+            ticket_id=ticket_id,
         )
         logger.info(f"[{trace_id}] Dissatisfaction escalation email sent to authority")
     except Exception as e:

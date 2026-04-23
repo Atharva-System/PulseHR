@@ -322,10 +322,11 @@ export default function TicketDetailPage() {
         )}
       </div>
 
-      {/* View Conversation Button */}
+      {/* View Conversation Button (admin only) */}
       {ticket.conversations.length > 0 &&
         ticket.user_id &&
-        !isProtectedIdentity && (
+        !isProtectedIdentity &&
+        isAdmin && (
           <button
             onClick={() =>
               navigate(

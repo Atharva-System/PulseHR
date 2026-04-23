@@ -140,7 +140,7 @@ export interface AgentReport {
 
 export interface NotificationItem {
   id: string;
-  type: "new_ticket" | "status_change" | "high_severity";
+  type: "new_ticket" | "status_change" | "high_severity" | "escalation";
   title: string;
   message: string;
   severity: string | null;
@@ -152,7 +152,6 @@ export interface NotificationItem {
 export interface NotificationsResponse {
   total: number;
   unread: number;
-  since: string | null;
   notifications: NotificationItem[];
 }
 

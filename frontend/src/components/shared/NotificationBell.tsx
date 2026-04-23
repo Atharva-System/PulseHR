@@ -7,52 +7,30 @@ import {
   Ticket,
   RefreshCw,
   CheckCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { notificationsApi } from "@/api/services";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/utils";
 import type { NotificationItem } from "@/types";
 
-const DISMISSED_KEY = "pulseHR_dismissed_notifications";
-
-function getDismissedIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function saveDismissedIds(ids: Set<string>) {
-  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...ids]));
-}
-
 export default function NotificationBell() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [allNotifications, setAllNotifications] = useState<NotificationItem[]>(
-    [],
-  );
-  const [dismissedIds, setDismissedIds] =
-    useState<Set<string>>(getDismissedIds);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [since, setSince] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const basePath = user?.role === "higher_authority" ? "/admin" : "/hr";
 
-  // Visible = not dismissed
-  const notifications = allNotifications.filter((n) => !dismissedIds.has(n.id));
-  const unread = notifications.length;
+  const unread = notifications.filter((n) => !n.is_read).length;
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
     try {
       const res = await notificationsApi.get();
-      setAllNotifications(res.data.notifications);
-      setSince(res.data.since);
+      setNotifications(res.data.notifications);
     } catch {
       // silently fail
     } finally {
@@ -78,29 +56,35 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  const markRead = async (id: string) => {
+    // Optimistic update
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+    );
+    try {
+      await notificationsApi.markRead(id);
+    } catch {
+      // Revert on failure
+      fetchNotifications();
+    }
+  };
+
+  const markAllRead = async () => {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    try {
+      await notificationsApi.markAllRead();
+    } catch {
+      fetchNotifications();
+    }
+  };
+
   const handleClick = (n: NotificationItem) => {
-    // Mark as read on click
-    dismissOne(n.id);
+    if (!n.is_read) markRead(n.id);
     if (n.ticket_id) {
       navigate(`${basePath}/tickets/${n.ticket_id}`);
       setOpen(false);
     }
-  };
-
-  const dismissOne = (id: string) => {
-    setDismissedIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      saveDismissedIds(next);
-      return next;
-    });
-  };
-
-  const dismissAll = () => {
-    const allIds = new Set(dismissedIds);
-    allNotifications.forEach((n) => allIds.add(n.id));
-    setDismissedIds(allIds);
-    saveDismissedIds(allIds);
   };
 
   const typeIcon = (type: string) => {
@@ -109,6 +93,12 @@ export default function NotificationBell() {
         return (
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
             <AlertTriangle size={14} className="text-red-600" />
+          </div>
+        );
+      case "escalation":
+        return (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100">
+            <ShieldAlert size={14} className="text-purple-600" />
           </div>
         );
       case "status_change":
@@ -150,20 +140,13 @@ export default function NotificationBell() {
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Notifications
-              </h3>
-              {since && (
-                <p className="text-[10px] text-muted-foreground">
-                  Since last login: {formatDate(since)}
-                </p>
-              )}
-            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Notifications
+            </h3>
             <div className="flex items-center gap-1">
               {unread > 0 && (
                 <button
-                  onClick={dismissAll}
+                  onClick={markAllRead}
                   className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
                   title="Mark all as read"
                 >
@@ -197,34 +180,42 @@ export default function NotificationBell() {
               <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
                 <Bell size={32} className="opacity-30" />
                 <p className="text-sm">All caught up!</p>
-                <p className="text-xs">No new notifications since last login</p>
+                <p className="text-xs">No new notifications</p>
               </div>
             ) : (
               notifications.map((n) => (
                 <div
                   key={n.id}
                   className={`group relative flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
-                    n.type === "high_severity" ? "bg-red-50/50" : ""
-                  }`}
+                    !n.is_read ? "bg-primary/[0.03]" : ""
+                  } ${n.type === "high_severity" || n.type === "escalation" ? "bg-red-50/50" : ""}`}
                 >
-                  {/* Dismiss single */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      dismissOne(n.id);
-                    }}
-                    className="absolute right-2 top-2 hidden rounded-full p-0.5 text-muted-foreground/50 hover:bg-muted hover:text-foreground group-hover:block transition-colors"
-                    title="Dismiss"
-                  >
-                    <X size={12} />
-                  </button>
+                  {/* Unread indicator */}
+                  {!n.is_read && (
+                    <div className="absolute left-1.5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-primary" />
+                  )}
+                  {/* Dismiss / mark read */}
+                  {!n.is_read && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markRead(n.id);
+                      }}
+                      className="absolute right-2 top-2 hidden rounded-full p-0.5 text-muted-foreground/50 hover:bg-muted hover:text-foreground group-hover:block transition-colors"
+                      title="Mark as read"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleClick(n)}
                     className="flex flex-1 items-start gap-3 text-left"
                   >
                     {typeIcon(n.type)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">
+                      <p
+                        className={`text-xs font-semibold truncate ${n.is_read ? "text-muted-foreground" : "text-foreground"}`}
+                      >
                         {n.title}
                       </p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">

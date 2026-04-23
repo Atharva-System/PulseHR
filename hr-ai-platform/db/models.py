@@ -281,3 +281,30 @@ class AuditLogModel(Base):
 
     def __repr__(self) -> str:
         return f"<AuditLog {self.id} type={self.event_type}>"
+
+
+class AppNotificationModel(Base):
+    """In-app notifications for HR / authority users."""
+
+    __tablename__ = "app_notifications"
+
+    id = Column(String(36), primary_key=True)  # UUID
+    user_id = Column(String(36), nullable=False, index=True)  # recipient users.id
+    type = Column(String(30), nullable=False, default="new_ticket")  # new_ticket | high_severity | status_change | escalation
+    title = Column(String(300), nullable=False)
+    message = Column(Text, default="")
+    severity = Column(String(20), default="")
+    ticket_id = Column(String(20), default="", index=True)
+    is_read = Column(Boolean, default=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    __table_args__ = (
+        Index("ix_appnotif_user_read", "user_id", "is_read"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AppNotification {self.id} user={self.user_id} type={self.type}>"

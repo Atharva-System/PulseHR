@@ -38,11 +38,6 @@ export default function Sidebar() {
     },
     { to: `${basePath}/tickets`, label: "Tickets", icon: <Ticket size={20} /> },
     {
-      to: `${basePath}/chats`,
-      label: "Conversations",
-      icon: <MessageSquare size={20} />,
-    },
-    {
       to: `${basePath}/reports`,
       label: "Reports",
       icon: <BarChart3 size={20} />,
@@ -61,6 +56,11 @@ export default function Sidebar() {
   ];
 
   if (user.role === "higher_authority") {
+    navItems.push({
+      to: `${basePath}/chats`,
+      label: "Conversations",
+      icon: <MessageSquare size={20} />,
+    });
     navItems.push({
       to: `${basePath}/agents`,
       label: "Agents",

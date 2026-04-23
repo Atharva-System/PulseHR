@@ -72,6 +72,24 @@ def create_app() -> FastAPI:
                         "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
                         "complaint_target VARCHAR(200) DEFAULT ''"
                     ))
+                    # Create app_notifications table if needed (idempotent)
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS app_notifications (
+                            id VARCHAR(36) PRIMARY KEY,
+                            user_id VARCHAR(36) NOT NULL REFERENCES users(id),
+                            type VARCHAR(50) NOT NULL DEFAULT 'new_ticket',
+                            title VARCHAR(300) NOT NULL,
+                            message TEXT NOT NULL DEFAULT '',
+                            severity VARCHAR(20) NOT NULL DEFAULT 'medium',
+                            ticket_id VARCHAR(100),
+                            is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_app_notifications_user_read "
+                        "ON app_notifications (user_id, is_read)"
+                    ))
                     conn.commit()
                 except Exception as e:
                     logger.warning("Column migration skipped: %s", e)

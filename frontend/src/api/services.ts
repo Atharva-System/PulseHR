@@ -101,13 +101,15 @@ export const reportsApi = {
 
 // ── Chat ─────────────────────────────────────────────────────────────────
 export const chatApi = {
-  send: (message: string, privacy_mode: PrivacyMode = "identified") =>
+  send: (message: string, privacy_mode: PrivacyMode = "confidential") =>
     api.post<ChatResponse>("/api/chat", { message, privacy_mode }),
 };
 
 // ── Notifications ────────────────────────────────────────────────────────
 export const notificationsApi = {
   get: () => api.get<NotificationsResponse>("/api/notifications"),
+  markRead: (id: string) => api.patch(`/api/notifications/${id}/read`),
+  markAllRead: () => api.patch("/api/notifications/read-all"),
 };
 
 // ── Agents ───────────────────────────────────────────────────────────────

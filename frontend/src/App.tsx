@@ -51,7 +51,6 @@ export default function App() {
                   path="/hr/tickets/:ticketId"
                   element={<TicketDetailPage />}
                 />
-                <Route path="/hr/chats" element={<ChatViewerPage />} />
                 <Route path="/hr/reports" element={<ReportsPage />} />
                 <Route path="/hr/users" element={<UserManagementPage />} />
                 <Route path="/hr/policies" element={<PolicyManagementPage />} />
