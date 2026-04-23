@@ -8,6 +8,7 @@ import {
   Ticket,
   ArrowLeft,
   AlertCircle,
+  AlertTriangle,
   Clock,
   CheckCircle2,
   CircleDot,
@@ -85,6 +86,9 @@ export default function MyTicketsPage() {
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [lowRatingSubmitted, setLowRatingSubmitted] = useState<string | null>(
+    null,
+  );
 
   const { data: tickets = [], isLoading: loading } = useMyTickets();
 
@@ -110,6 +114,7 @@ export default function MyTicketsPage() {
   const handleSubmitFeedback = async (ticketId: string) => {
     if (feedbackRating === 0 || submittingFeedback) return;
     setSubmittingFeedback(true);
+    const isLowRating = feedbackRating <= 2;
     try {
       const { data } = await feedbackApi.submit(
         ticketId,
@@ -120,6 +125,7 @@ export default function MyTicketsPage() {
       setShowFeedback(null);
       setFeedbackRating(0);
       setFeedbackComment("");
+      if (isLowRating) setLowRatingSubmitted(ticketId);
     } catch {
       /* already submitted or error */
     } finally {
@@ -400,6 +406,18 @@ export default function MyTicketsPage() {
                                 </button>
                               ))}
                             </div>
+                            {/* Low rating warning notice — always visible */}
+                            <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                              <AlertTriangle
+                                size={14}
+                                className="mt-0.5 shrink-0 text-orange-500"
+                              />
+                              <p className="text-xs text-orange-700">
+                                <strong>Note:</strong> Submitting 1–2 stars will
+                                automatically reopen this ticket and notify the
+                                senior authority to review your case.
+                              </p>
+                            </div>
                             <input
                               type="text"
                               value={feedbackComment}
@@ -435,13 +453,32 @@ export default function MyTicketsPage() {
                             </div>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setShowFeedback(ticket.ticket_id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-                          >
-                            <Star size={14} />
-                            Rate this resolution
-                          </button>
+                          <div className="flex flex-col gap-2">
+                            {/* Post low-rating confirmation notice */}
+                            {lowRatingSubmitted === ticket.ticket_id && (
+                              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                                <AlertTriangle
+                                  size={14}
+                                  className="mt-0.5 shrink-0 text-amber-600"
+                                />
+                                <p className="text-xs text-amber-800">
+                                  <strong>
+                                    Your concern has been escalated.
+                                  </strong>{" "}
+                                  This ticket has been <strong>reopened</strong>{" "}
+                                  and the senior authority has been notified to
+                                  review your case directly.
+                                </p>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => setShowFeedback(ticket.ticket_id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                            >
+                              <Star size={14} />
+                              Rate this resolution
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}

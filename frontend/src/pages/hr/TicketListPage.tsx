@@ -1,22 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ticketsApi } from "@/api/services";
 import { useTickets } from "@/hooks/useQueries";
 import type { Ticket } from "@/types";
 import { SeverityBadge, StatusBadge } from "@/components/shared/Badges";
 import { formatDate } from "@/lib/utils";
-import {
-  Search,
-  Filter,
-  ChevronDown,
-  ExternalLink,
-  AlertTriangle,
-} from "lucide-react";
+import { Search, Filter, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { TableRowsSkeleton } from "@/components/shared/Skeleton";
 
 const STATUS_TABS = ["all", "open", "in_progress", "resolved", "closed"];
-const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 
 export default function TicketListPage() {
   const { user } = useAuth();
@@ -24,29 +16,13 @@ export default function TicketListPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [severity, setSeverity] = useState("");
   const [search, setSearch] = useState("");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
   const basePath = user?.role === "higher_authority" ? "/admin" : "/hr";
 
-  const {
-    data: tickets = [],
-    isLoading: loading,
-    refetch,
-  } = useTickets({
+  const { data: tickets = [], isLoading: loading } = useTickets({
     status: activeTab === "all" ? undefined : activeTab,
     severity: severity || undefined,
     page_size: 200,
   });
-
-  const handleStatusUpdate = async (ticketId: string, newStatus: string) => {
-    setUpdatingId(ticketId);
-    try {
-      await ticketsApi.updateStatus(ticketId, newStatus);
-      refetch();
-    } finally {
-      setUpdatingId(null);
-    }
-  };
 
   const filtered = tickets.filter(
     (t) =>
@@ -148,9 +124,6 @@ export default function TicketListPage() {
                   <th className="px-6 py-3 text-left font-medium text-muted-foreground">
                     Updated
                   </th>
-                  <th className="px-6 py-3 text-left font-medium text-muted-foreground">
-                    Actions
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -235,52 +208,12 @@ export default function TicketListPage() {
                     <td className="px-6 py-3 text-xs text-muted-foreground">
                       {formatDate(t.updated_at)}
                     </td>
-                    <td
-                      className="px-6 py-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
-                          <select
-                            value={t.status}
-                            disabled={updatingId === t.ticket_id}
-                            onChange={(e) =>
-                              handleStatusUpdate(t.ticket_id, e.target.value)
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            className="appearance-none rounded-lg border border-input bg-white py-1.5 pl-3 pr-8 text-xs font-medium outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50 cursor-pointer"
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>
-                                {s
-                                  .replace("_", " ")
-                                  .replace(/\b\w/g, (c) => c.toUpperCase())}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown
-                            size={12}
-                            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          />
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`${basePath}/tickets/${t.ticket_id}`);
-                          }}
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                          title="View details"
-                        >
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
-                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={9}
                       className="px-6 py-12 text-center text-muted-foreground"
                     >
                       No tickets found.
