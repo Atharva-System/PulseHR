@@ -26,6 +26,7 @@ def create_ticket(
     privacy_mode: str = "identified",
     thread_id: str = "",
     complaint_target: str = "",
+    complaint_target_user_id: str = "",
     trace_id: str = "",
 ) -> str:
     """Create an HR support ticket, persist to PostgreSQL, and return its ID.
@@ -61,6 +62,7 @@ def create_ticket(
                 privacy_mode=privacy_mode,
                 thread_id=thread_id,
                 complaint_target=complaint_target,
+                complaint_target_user_id=complaint_target_user_id,
                 assignee=assignee,
                 status="open",
                 user_id=user_id,

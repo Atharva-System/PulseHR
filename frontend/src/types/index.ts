@@ -30,6 +30,7 @@ export interface Ticket {
   severity: string;
   privacy_mode: PrivacyMode;
   complaint_target: string;
+  complaint_target_user_id?: string;
   assignee: string;
   assignee_id: string | null;
   status: string;
@@ -136,6 +137,19 @@ export interface ReportSummary {
 export interface AgentReport {
   agents: { agent: string; count: number; intents: Record<string, number> }[];
   total_handled: number;
+}
+
+export interface ComplaintTargetReportItem {
+  target_key: string;
+  target_user_id: string;
+  target_name: string;
+  total_tickets: number;
+  open_tickets: number;
+  closed_tickets: number;
+  high_priority_tickets: number;
+  severity_breakdown: Record<string, number>;
+  status_breakdown: Record<string, number>;
+  last_ticket_at: string | null;
 }
 
 export interface NotificationItem {

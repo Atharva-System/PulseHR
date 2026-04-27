@@ -12,6 +12,7 @@ import type {
   ChatResponse,
   ReportSummary,
   AgentReport,
+  ComplaintTargetReportItem,
   NotificationsResponse,
   AgentConfig,
   UpdateAgentPayload,
@@ -99,6 +100,10 @@ export const reportsApi = {
       "/api/reports/tickets",
       { params: { days } },
     ),
+  complaintTargets: (days?: number) =>
+    api.get<ComplaintTargetReportItem[]>("/api/reports/complaint-targets", {
+      params: { days },
+    }),
 };
 
 // ── Chat ─────────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ class ComplaintRecord(BaseModel):
     privacy_mode: str = "identified"
     thread_id: str = ""
     complaint_target: str = ""
+    complaint_target_user_id: str = ""
     escalation_action: str = ""
     ticket_id: str = ""
     trace_id: str = ""

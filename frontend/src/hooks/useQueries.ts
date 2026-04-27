@@ -30,6 +30,8 @@ export const QK = {
   slaBreached: () => ["slaBreached"] as const,
   reportSummary: (days: number) => ["reportSummary", days] as const,
   reportAgents: (days: number) => ["reportAgents", days] as const,
+  reportComplaintTargets: (days: number) =>
+    ["reportComplaintTargets", days] as const,
   users: (params?: object) => ["users", params ?? {}] as const,
   agents: () => ["agents"] as const,
   agentModels: () => ["agentModels"] as const,
@@ -126,6 +128,14 @@ export function useReportAgents(days: number) {
   return useQuery({
     queryKey: QK.reportAgents(days),
     queryFn: () => reportsApi.agents(days).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useReportComplaintTargets(days: number) {
+  return useQuery({
+    queryKey: QK.reportComplaintTargets(days),
+    queryFn: () => reportsApi.complaintTargets(days).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 }

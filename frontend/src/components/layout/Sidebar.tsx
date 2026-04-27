@@ -15,6 +15,7 @@ import {
   Bell,
   Star,
   ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 
@@ -43,6 +44,11 @@ export default function Sidebar() {
       to: `${basePath}/reports`,
       label: "Reports",
       icon: <BarChart3 size={20} />,
+    },
+    {
+      to: `${basePath}/complaint-profiles`,
+      label: "Complaint Profiles",
+      icon: <ShieldAlert size={20} />,
     },
     { to: `${basePath}/users`, label: "Users", icon: <Users size={20} /> },
     {

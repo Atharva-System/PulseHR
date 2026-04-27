@@ -25,6 +25,7 @@ class HRState(TypedDict, total=False):
     severity: str
     complaint_type: str
     complaint_target: str
+    complaint_target_user_id: str
 
     # --- Agent output ---
     response: str

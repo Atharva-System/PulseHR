@@ -117,6 +117,7 @@ class ComplaintModel(Base):
     privacy_mode = Column(String(20), default="identified", index=True)
     thread_id = Column(String(20), default="", index=True)
     complaint_target = Column(String(200), default="")
+    complaint_target_user_id = Column(String(36), default="", index=True)
     escalation_action = Column(String(30), default="")
     ticket_id = Column(String(20), default="")
     trace_id = Column(String(50), default="", index=True)
@@ -147,6 +148,7 @@ class TicketModel(Base):
     privacy_mode = Column(String(20), default="identified", index=True)
     thread_id = Column(String(20), default="", index=True)
     complaint_target = Column(String(200), default="")
+    complaint_target_user_id = Column(String(36), default="", index=True)
     assignee = Column(String(100), default="hr-team")
     assignee_id = Column(String(36), nullable=True)       # FK-style to users.id
     status = Column(String(20), default="open", index=True)

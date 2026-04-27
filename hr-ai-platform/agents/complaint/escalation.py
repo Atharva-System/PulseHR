@@ -26,6 +26,7 @@ def handle_escalation(state: HRState) -> dict:
     privacy_mode = state.get("privacy_mode", "identified")
     thread_id = state.get("thread_id", "")
     complaint_target = state.get("complaint_target", "")
+    complaint_target_user_id = state.get("complaint_target_user_id", "")
     hr_targeted = bool(complaint_target and is_complaint_about_hr(complaint_target))
 
     logger.info(f"[{trace_id}] Escalation handler — severity={severity}, hr_targeted={hr_targeted}")
@@ -44,6 +45,7 @@ def handle_escalation(state: HRState) -> dict:
                 privacy_mode=privacy_mode,
                 thread_id=thread_id,
                 complaint_target=complaint_target,
+                complaint_target_user_id=complaint_target_user_id,
                 trace_id=trace_id,
             )
             # Notify only higher_authority (never HR)
@@ -75,6 +77,7 @@ def handle_escalation(state: HRState) -> dict:
                 privacy_mode=privacy_mode,
                 thread_id=thread_id,
                 complaint_target=complaint_target,
+                complaint_target_user_id=complaint_target_user_id,
                 trace_id=trace_id,
             )
         elif action == "create_ticket":
@@ -86,6 +89,7 @@ def handle_escalation(state: HRState) -> dict:
                 privacy_mode=privacy_mode,
                 thread_id=thread_id,
                 complaint_target=complaint_target,
+                complaint_target_user_id=complaint_target_user_id,
                 trace_id=trace_id,
             )
 
@@ -99,6 +103,7 @@ def handle_escalation(state: HRState) -> dict:
             privacy_mode=privacy_mode,
             thread_id=thread_id,
             complaint_target=complaint_target,
+            complaint_target_user_id=complaint_target_user_id,
             escalation_action=action,
             ticket_id=ticket_id,
             trace_id=trace_id,

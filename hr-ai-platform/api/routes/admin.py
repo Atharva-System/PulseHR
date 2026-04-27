@@ -49,6 +49,7 @@ class TicketResponse(BaseModel):
     severity: str
     privacy_mode: str
     complaint_target: str = ""
+    complaint_target_user_id: str = ""
     assignee: str
     assignee_id: Optional[str] = None
     status: str
@@ -106,6 +107,7 @@ def _ticket_to_dict(t: TicketModel, viewer_role: str) -> dict:
         "severity": t.severity or "",
         "privacy_mode": privacy_mode,
         "complaint_target": getattr(t, "complaint_target", "") or "",
+        "complaint_target_user_id": getattr(t, "complaint_target_user_id", "") or "",
         "assignee": t.assignee or "",
         "assignee_id": t.assignee_id or None,
         "status": t.status or "",

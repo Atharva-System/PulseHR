@@ -17,6 +17,7 @@ import PolicyManagementPage from "@/pages/hr/PolicyManagementPage";
 import MessagesPage from "@/pages/hr/MessagesPage";
 import MyTicketsPage from "@/pages/user/MyTicketsPage";
 import ReviewsPage from "@/pages/hr/ReviewsPage";
+import ComplaintProfilesPage from "@/pages/hr/ComplaintProfilesPage";
 
 export default function App() {
   return (
@@ -57,6 +58,10 @@ export default function App() {
                 <Route path="/hr/policies" element={<PolicyManagementPage />} />
                 <Route path="/hr/messages" element={<MessagesPage />} />
                 <Route path="/hr/reviews" element={<ReviewsPage />} />
+                <Route
+                  path="/hr/complaint-profiles"
+                  element={<ComplaintProfilesPage />}
+                />
               </Route>
             </Route>
 
@@ -80,6 +85,10 @@ export default function App() {
                 />
                 <Route path="/admin/messages" element={<MessagesPage />} />
                 <Route path="/admin/reviews" element={<ReviewsPage />} />
+                <Route
+                  path="/admin/complaint-profiles"
+                  element={<ComplaintProfilesPage />}
+                />
                 <Route path="/admin/agents" element={<AgentManagementPage />} />
                 <Route
                   path="/admin/notifications"

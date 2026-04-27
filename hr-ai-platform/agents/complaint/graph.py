@@ -40,6 +40,7 @@ from db.connection import get_db_session
 from db.models import ConversationModel, TicketModel
 from utils.context import build_compact_history, strip_ticket_notice
 from utils.logger import get_logger
+from utils.complaint_target import resolve_complaint_target
 
 logger = get_logger(__name__)
 
@@ -559,6 +560,34 @@ def generate_summary_node(state: HRState) -> dict:
                     logger.info(f"[{trace_id}] Fallback extracted complaint_target: {complaint_target}")
                     break
 
+        complaint_target_user_id = ""
+        resolved_target = resolve_complaint_target(complaint_target) if complaint_target else None
+        if resolved_target:
+            complaint_target_user_id = resolved_target["user_id"]
+            complaint_target = resolved_target["full_name"] or resolved_target["username"]
+            logger.info(
+                f"[{trace_id}] Resolved complaint target to user "
+                f"{complaint_target_user_id}: {complaint_target}"
+            )
+        elif complaint_target:
+            # A specific name was mentioned but could NOT be matched to any DB user.
+            # Flag so the graph can short-circuit and inform the employee.
+            logger.warning(
+                f"[{trace_id}] Complaint target '{complaint_target}' not found in DB "
+                f"— complaint will not be filed."
+            )
+            return {
+                "complaint_target": complaint_target,
+                "complaint_target_user_id": "",
+                "metadata": {
+                    **metadata,
+                    "_ticket_summary": summary,
+                    "_target_not_found": True,
+                    "_target_not_found_name": complaint_target,
+                },
+            }
+        # else: no target named at all → general complaint, proceed normally
+
         # --- Auto-escalate if complaint is about HR staff ---
         from utils.privacy import is_complaint_about_hr
         privacy_override = {}
@@ -585,6 +614,7 @@ def generate_summary_node(state: HRState) -> dict:
 
         result = {
             "complaint_target": complaint_target,
+            "complaint_target_user_id": complaint_target_user_id,
             "metadata": {
                 **metadata,
                 "_ticket_summary": summary,
@@ -603,6 +633,37 @@ def generate_summary_node(state: HRState) -> dict:
                 "_ticket_summary": message,
             }
         }
+
+
+def target_not_found_node(state: HRState) -> dict:
+    """Node: inform the employee that the person they named is not in the system.
+
+    When a complaint is filed against a name that cannot be matched to any
+    active user in the database, we do NOT create a ticket.  Instead we reply
+    explaining this and suggest they double-check the name.
+    """
+    trace_id = state.get("trace_id", "N/A")
+    logger.info(f"[{trace_id}] Entering target_not_found_node — complaint will be ignored")
+
+    metadata = state.get("metadata", {})
+    name = metadata.get("_target_not_found_name", "") or state.get("complaint_target", "")
+
+    name_fragment = f" **\"{name}\"**" if name else ""
+
+    response = (
+        f"I appreciate you reaching out, and I want to make sure your concern is handled properly.\n\n"
+        f"Unfortunately, I wasn't able to find a person named{name_fragment} in our system records. "
+        f"This means the complaint cannot be formally filed at this time, as all complaints must be "
+        f"linked to an active employee in the organisation.\n\n"
+        f"Could you double-check the full name or employee ID of the person involved? "
+        f"Once I can confirm they are in the system, I'll be happy to proceed with your complaint."
+    )
+
+    return {
+        "response": response,
+        "agent_used": "complaint_agent",
+        "escalation_action": "none",
+    }
 
 
 def generate_warm_closing_node(state: HRState) -> dict:
@@ -954,6 +1015,18 @@ def route_after_ticket_check(state: HRState) -> str:
     return "classify"
 
 
+def route_after_summary(state: HRState) -> str:
+    """After summary generation, check if target was resolved.
+
+    If the complaint target name could not be matched to a real user in the DB,
+    skip ticket creation entirely and inform the employee.
+    """
+    metadata = state.get("metadata", {})
+    if metadata.get("_target_not_found"):
+        return "target_not_found"
+    return "generate_warm_closing"
+
+
 def route_after_completeness(state: HRState) -> str:
     """After completeness check, decide: gather more, confirm, or create ticket."""
     metadata = state.get("metadata", {})
@@ -987,6 +1060,7 @@ def build_complaint_graph() -> StateGraph:
     graph.add_node("ask_followup", ask_followup_node)
     graph.add_node("ask_confirmation", ask_confirmation_node)
     graph.add_node("generate_summary", generate_summary_node)
+    graph.add_node("target_not_found", target_not_found_node)
     graph.add_node("generate_warm_closing", generate_warm_closing_node)
     graph.add_node("escalate", escalate_node)
     graph.add_node("enrich_response", enrich_response_node)
@@ -1012,8 +1086,10 @@ def build_complaint_graph() -> StateGraph:
     # CONFIRMING path: ask confirmation → save → end
     graph.add_edge("ask_confirmation", "save_to_memory")
 
-    # COMPLETE path: summary → warm closing → escalate → enrich → save → end
-    graph.add_edge("generate_summary", "generate_warm_closing")
+    # COMPLETE path: summary → (target check) → warm closing → escalate → enrich → save → end
+    # If target not in DB: summary → target_not_found → save → end
+    graph.add_conditional_edges("generate_summary", route_after_summary)
+    graph.add_edge("target_not_found", "save_to_memory")
     graph.add_edge("generate_warm_closing", "escalate")
     graph.add_edge("escalate", "enrich_response")
     graph.add_edge("enrich_response", "save_to_memory")

@@ -82,8 +82,16 @@ def create_app() -> FastAPI:
                         "complaint_target VARCHAR(200) DEFAULT ''"
                     ))
                     conn.execute(text(
+                        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "
+                        "complaint_target_user_id VARCHAR(36) DEFAULT ''"
+                    ))
+                    conn.execute(text(
                         "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
                         "complaint_target VARCHAR(200) DEFAULT ''"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
+                        "complaint_target_user_id VARCHAR(36) DEFAULT ''"
                     ))
                     # Create app_notifications table if needed (idempotent)
                     conn.execute(text("""

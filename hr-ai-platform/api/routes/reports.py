@@ -39,6 +39,31 @@ class AgentReportResponse(BaseModel):
     total_handled: int
 
 
+class ComplaintTargetReportItem(BaseModel):
+    target_key: str
+    target_user_id: str = ""
+    target_name: str
+    total_tickets: int
+    open_tickets: int
+    closed_tickets: int
+    high_priority_tickets: int
+    severity_breakdown: dict
+    status_breakdown: dict
+    last_ticket_at: Optional[str] = None
+
+
+def _allowed_report_levels(current_user: UserModel) -> set[str] | None:
+    if current_user.role == "higher_authority":
+        return None
+    if not current_user.receive_notifications:
+        return set()
+    return {
+        (level or "").strip().lower()
+        for level in (current_user.notification_levels or "").split(",")
+        if (level or "").strip()
+    }
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -176,5 +201,81 @@ async def ticket_report(
             "total_tickets": len(tickets),
             "daily": sorted(daily.values(), key=lambda x: x["date"]),
         }
+    finally:
+        session.close()
+
+
+@router.get("/complaint-targets", response_model=list[ComplaintTargetReportItem])
+async def complaint_target_report(
+    days: int = Query(30, ge=1, le=365),
+    current_user: UserModel = Depends(require_hr),
+):
+    """Aggregate complaint tickets by the person the complaint is about."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    allowed_levels = _allowed_report_levels(current_user)
+
+    session = get_db_session()
+    try:
+        q = session.query(TicketModel).filter(
+            TicketModel.created_at >= since,
+            TicketModel.complaint_target != "",
+        )
+        if allowed_levels is not None:
+            if not allowed_levels:
+                return []
+            q = q.filter(TicketModel.severity.in_(sorted(allowed_levels)))
+
+        tickets = q.order_by(TicketModel.created_at.desc()).all()
+        grouped: dict[str, dict] = {}
+
+        for t in tickets:
+            target_user_id = (getattr(t, "complaint_target_user_id", "") or "").strip()
+            target_name = (getattr(t, "complaint_target", "") or "").strip()
+            if not target_name:
+                continue
+
+            group_key = target_user_id or target_name.lower()
+            if group_key not in grouped:
+                grouped[group_key] = {
+                    "target_key": group_key,
+                    "target_user_id": target_user_id,
+                    "target_name": target_name,
+                    "total_tickets": 0,
+                    "open_tickets": 0,
+                    "closed_tickets": 0,
+                    "high_priority_tickets": 0,
+                    "severity_breakdown": {},
+                    "status_breakdown": {},
+                    "last_ticket_at": None,
+                }
+
+            item = grouped[group_key]
+            item["total_tickets"] += 1
+
+            sev = (t.severity or "unknown").lower()
+            status = (t.status or "unknown").lower()
+            item["severity_breakdown"][sev] = item["severity_breakdown"].get(sev, 0) + 1
+            item["status_breakdown"][status] = item["status_breakdown"].get(status, 0) + 1
+
+            if status in ("open", "in_progress"):
+                item["open_tickets"] += 1
+            if status == "closed":
+                item["closed_tickets"] += 1
+            if sev in ("high", "critical"):
+                item["high_priority_tickets"] += 1
+
+            created_at = t.created_at.isoformat() if t.created_at else None
+            if created_at and (item["last_ticket_at"] is None or created_at > item["last_ticket_at"]):
+                item["last_ticket_at"] = created_at
+
+        result = sorted(
+            grouped.values(),
+            key=lambda item: (
+                -item["total_tickets"],
+                -item["high_priority_tickets"],
+                item["target_name"].lower(),
+            ),
+        )
+        return [ComplaintTargetReportItem(**item) for item in result]
     finally:
         session.close()
