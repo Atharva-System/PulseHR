@@ -82,3 +82,6 @@ tmp/
 temp/
 *.tmp
 *.bak
+graphify-out/
+.github/
+.codex

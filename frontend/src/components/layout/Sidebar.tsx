@@ -13,6 +13,8 @@ import {
   FileText,
   MessageCircle,
   Bell,
+  Star,
+  ShieldCheck,
 } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 
@@ -53,6 +55,11 @@ export default function Sidebar() {
       label: "Messages",
       icon: <MessageCircle size={20} />,
     },
+    {
+      to: `${basePath}/reviews`,
+      label: "Reviews",
+      icon: <Star size={20} />,
+    },
   ];
 
   if (user.role === "higher_authority") {
@@ -68,8 +75,8 @@ export default function Sidebar() {
     });
     navItems.push({
       to: `${basePath}/notifications`,
-      label: "Notifications",
-      icon: <Bell size={20} />,
+      label: "Access Rules",
+      icon: <ShieldCheck size={20} />,
     });
   }
 

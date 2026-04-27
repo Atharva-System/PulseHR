@@ -42,6 +42,8 @@ export const QK = {
   policies: () => ["policies"] as const,
   notifications: () => ["notifications"] as const,
   feedback: (ticketId: string) => ["feedback", ticketId] as const,
+  feedbackList: () => ["feedbackList"] as const,
+  feedbackStats: () => ["feedbackStats"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -261,6 +263,23 @@ export function useMessages(withUser: string) {
     staleTime: 15 * 1000,
     refetchInterval: 10 * 1000, // Poll every 10s in active conversation
     enabled: !!withUser,
+  });
+}
+
+// ─── Feedback ────────────────────────────────────────────────────────────────
+export function useFeedbackList() {
+  return useQuery({
+    queryKey: QK.feedbackList(),
+    queryFn: () => feedbackApi.list().then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useFeedbackStats() {
+  return useQuery({
+    queryKey: QK.feedbackStats(),
+    queryFn: () => feedbackApi.stats().then((r) => r.data),
+    staleTime: 60 * 1000,
   });
 }
 

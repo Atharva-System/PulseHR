@@ -245,7 +245,7 @@ export default function NotificationManagementPage() {
                 {config.label}
               </h2>
               <p className="text-xs text-gray-500">
-                {totalLevels} of {maxLevels} notification levels active across{" "}
+                {totalLevels} of {maxLevels} access levels active across{" "}
                 {users.length} user{users.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -352,7 +352,7 @@ export default function NotificationManagementPage() {
                           key={lvl}
                           onClick={() => toggleLevel(u, lvl)}
                           disabled={isUpdating}
-                          title={`${active ? "Disable" : "Enable"} ${lc.label} notifications`}
+                          title={`${active ? "Disable" : "Enable"} ${lc.label} access`}
                           className={cn(
                             "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all w-[72px] justify-center",
                             active
@@ -422,11 +422,11 @@ export default function NotificationManagementPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Notification Management
+            Severity Access Control
           </h1>
           <p className="text-sm text-gray-500">
-            Control notification levels per user — choose which severity levels
-            trigger email alerts.
+            Control severity access per user. These levels now govern email
+            notifications, review visibility, and HR ticket visibility.
           </p>
         </div>
       </div>
@@ -513,7 +513,7 @@ export default function NotificationManagementPage() {
       {/* Info footer */}
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-5 py-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-2">
-          How notification levels work
+          How severity access works
         </h3>
         <ul className="space-y-1.5 text-xs text-gray-500">
           <li className="flex items-start gap-2">
@@ -534,7 +534,7 @@ export default function NotificationManagementPage() {
             <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-yellow-500 shrink-0" />
             <span>
               <strong className="text-yellow-600">Medium</strong> — Standard:
-              new complaints, assignment updates, status changes.
+              complaint handling, assignment updates, status changes.
             </span>
           </li>
           <li className="flex items-start gap-2">
@@ -547,10 +547,9 @@ export default function NotificationManagementPage() {
           <li className="flex items-start gap-2">
             <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
             <span>
-              The toggle on the right controls all levels at once. A{" "}
-              <strong className="text-yellow-600">yellow</strong> toggle means
-              some levels are active. Notifications go to the user's registered
-              email.
+              These severity levels now work across 3 places together: email
+              notifications, review visibility, and ticket visibility for HR
+              users. Senior Authority still has full access across all levels.
             </span>
           </li>
         </ul>

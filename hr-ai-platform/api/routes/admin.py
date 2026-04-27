@@ -118,6 +118,32 @@ def _ticket_to_dict(t: TicketModel, viewer_role: str) -> dict:
     }
 
 
+def _allowed_ticket_levels(current_user: UserModel) -> set[str] | None:
+    """Return visible severity levels for the current viewer.
+
+    - higher_authority: unrestricted
+    - hr: restricted to assigned notification levels
+    """
+    if current_user.role == "higher_authority":
+        return None
+
+    if not current_user.receive_notifications:
+        return set()
+
+    return {
+        (level or "").strip().lower()
+        for level in (current_user.notification_levels or "").split(",")
+        if (level or "").strip()
+    }
+
+
+def _can_view_ticket_by_level(ticket: TicketModel, current_user: UserModel) -> bool:
+    allowed_levels = _allowed_ticket_levels(current_user)
+    if allowed_levels is None:
+        return True
+    return (ticket.severity or "").lower() in allowed_levels
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -138,6 +164,7 @@ async def list_tickets(
 
     session = get_db_session()
     try:
+        allowed_levels = _allowed_ticket_levels(current_user)
         q = session.query(TicketModel)
         if ticket_status:
             q = q.filter(TicketModel.status == ticket_status)
@@ -149,6 +176,10 @@ async def list_tickets(
             q = q.filter(TicketModel.created_at >= datetime.fromisoformat(date_from))
         if date_to:
             q = q.filter(TicketModel.created_at <= datetime.fromisoformat(date_to + "T23:59:59"))
+        if allowed_levels is not None:
+            if not allowed_levels:
+                return []
+            q = q.filter(TicketModel.severity.in_(sorted(allowed_levels)))
 
         total = q.count()
         tickets = (
@@ -182,7 +213,19 @@ async def ticket_stats(
     """Aggregated ticket statistics."""
     session = get_db_session()
     try:
-        tickets = session.query(TicketModel).all()
+        allowed_levels = _allowed_ticket_levels(current_user)
+        q = session.query(TicketModel)
+        if allowed_levels is not None:
+            if not allowed_levels:
+                return TicketStatsResponse(
+                    total=0,
+                    by_status={},
+                    by_severity={},
+                    sla_breached=0,
+                    avg_resolution_hours=None,
+                )
+            q = q.filter(TicketModel.severity.in_(sorted(allowed_levels)))
+        tickets = q.all()
         now = datetime.now(timezone.utc)
         by_status: dict[str, int] = {}
         by_severity: dict[str, int] = {}
@@ -229,6 +272,11 @@ async def get_ticket(
         ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
+        if not _can_view_ticket_by_level(ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is outside your assigned severity access levels",
+            )
 
         # Block HR from viewing tickets that target HR staff
         target = getattr(ticket, "complaint_target", "") or ""
@@ -331,6 +379,11 @@ async def update_ticket_status(
         ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
+        if not _can_view_ticket_by_level(ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is outside your assigned severity access levels",
+            )
 
         old_status = ticket.status
         ticket.status = body.status
@@ -366,6 +419,11 @@ async def add_comment(
         ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
+        if not _can_view_ticket_by_level(ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is outside your assigned severity access levels",
+            )
 
         comment = TicketCommentModel(
             id=generate_id("CMT"),
@@ -399,6 +457,14 @@ async def list_comments(
     """List all comments on a ticket."""
     session = get_db_session()
     try:
+        ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        if not _can_view_ticket_by_level(ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is outside your assigned severity access levels",
+            )
         comments = (
             session.query(TicketCommentModel)
             .filter_by(ticket_id=ticket_id)
@@ -436,6 +502,16 @@ async def assign_ticket(
         ticket = session.query(TicketModel).filter_by(ticket_id=ticket_id).first()
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
+        if not _can_view_ticket_by_level(ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="This ticket is outside your assigned severity access levels",
+            )
+        if (ticket.status or "").lower() == "closed":
+            raise HTTPException(
+                status_code=400,
+                detail="Closed tickets cannot be reassigned",
+            )
 
         # Verify assignee exists and is HR or higher_authority
         assignee = session.query(UserModel).filter_by(id=body.assignee_id, is_active=True).first()
@@ -443,6 +519,22 @@ async def assign_ticket(
             raise HTTPException(status_code=404, detail="Assignee user not found")
         if assignee.role not in ("hr", "higher_authority"):
             raise HTTPException(status_code=400, detail="Can only assign to HR staff")
+        if assignee.id == current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot assign the ticket to yourself",
+            )
+        if current_user.role == "hr":
+            assignee_levels = {
+                (level or "").strip().lower()
+                for level in (assignee.notification_levels or "").split(",")
+                if (level or "").strip()
+            }
+            if (ticket.severity or "").lower() not in assignee_levels:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Selected assignee is not assigned to this ticket severity level",
+                )
 
         old_assignee = ticket.assignee
         ticket.assignee = assignee.full_name or assignee.username
@@ -504,16 +596,17 @@ async def sla_breached_tickets(
     session = get_db_session()
     try:
         now = datetime.now(timezone.utc)
-        tickets = (
-            session.query(TicketModel)
-            .filter(
-                TicketModel.status.in_(["open", "in_progress"]),
-                TicketModel.sla_deadline.isnot(None),
-                TicketModel.sla_deadline < now,
-            )
-            .order_by(TicketModel.sla_deadline.asc())
-            .all()
+        allowed_levels = _allowed_ticket_levels(current_user)
+        q = session.query(TicketModel).filter(
+            TicketModel.status.in_(["open", "in_progress"]),
+            TicketModel.sla_deadline.isnot(None),
+            TicketModel.sla_deadline < now,
         )
+        if allowed_levels is not None:
+            if not allowed_levels:
+                return []
+            q = q.filter(TicketModel.severity.in_(sorted(allowed_levels)))
+        tickets = q.order_by(TicketModel.sla_deadline.asc()).all()
         return [_ticket_to_dict(t, current_user.role) for t in tickets]
     finally:
         session.close()

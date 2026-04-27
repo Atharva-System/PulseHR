@@ -76,17 +76,27 @@ export default function TicketDetailPage() {
   };
 
   const handleOpenAssign = async () => {
+    if (!ticket || ticket.status === "closed") return;
     setShowAssignModal(true);
     try {
-      const { data: hrList } = await usersApi.list({ role: "hr" });
-      let assignableUsers = hrList.filter((u) => u.is_active);
+      const { data: allUsers } = await usersApi.list();
+      const ticketSeverity = (ticket?.severity || "").toLowerCase();
+      let assignableUsers = allUsers.filter(
+        (u) => u.is_active && (u.role === "hr" || u.role === "higher_authority"),
+      );
+
+      assignableUsers = assignableUsers.filter((u) => u.id !== user?.id);
 
       if (user?.role === "hr") {
-        // HR sees all other HR (exclude themselves)
-        assignableUsers = assignableUsers.filter((u) => u.id !== user.id);
+        // HR can assign only within the matching severity coverage.
+        assignableUsers = assignableUsers.filter(
+          (u) =>
+            u.notification_levels.some(
+              (level) => level.toLowerCase() === ticketSeverity,
+            ),
+        );
       }
-      // Higher Authority sees only HR users (not themselves or other authority)
-      // hrList already filtered to role=hr, so no extra filter needed
+      // Higher Authority can assign any active HR / authority user.
 
       setHrUsers(assignableUsers);
     } catch {
@@ -178,6 +188,7 @@ export default function TicketDetailPage() {
   const isAnonymous = ticket.privacy_mode === "anonymous";
   const isConfidential = ticket.privacy_mode === "confidential";
   const isAdmin = user?.role === "higher_authority";
+  const canAssignTicket = ticket.status !== "closed";
 
   return (
     <div className="space-y-6">
@@ -287,7 +298,8 @@ export default function TicketDetailPage() {
               </p>
               <button
                 onClick={handleOpenAssign}
-                className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                disabled={!canAssignTicket}
+                className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
               >
                 <UserCheck size={12} />
                 {ticket.assignee_id ? "Reassign" : "Assign"}

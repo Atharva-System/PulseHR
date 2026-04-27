@@ -225,6 +225,9 @@ export interface Feedback {
   user_id: string;
   rating: number;
   comment: string;
+  ticket_title: string;
+  ticket_severity: string;
+  ticket_status: string;
   created_at: string | null;
 }
 

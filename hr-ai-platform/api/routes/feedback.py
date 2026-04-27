@@ -32,7 +32,45 @@ class FeedbackResponse(BaseModel):
     user_id: str
     rating: float
     comment: str
+    ticket_title: str = ""
+    ticket_severity: str = ""
+    ticket_status: str = ""
     created_at: Optional[str] = None
+
+
+def _allowed_feedback_levels(current_user: UserModel) -> set[str] | None:
+    """Return visible severity levels for the current viewer.
+
+    - higher_authority: unrestricted
+    - hr: restricted to their assigned notification levels
+    """
+    if current_user.role == "higher_authority":
+        return None
+
+    if not current_user.receive_notifications:
+        return set()
+
+    levels = {
+        (level or "").strip().lower()
+        for level in (current_user.notification_levels or "")
+        .split(",")
+        if (level or "").strip()
+    }
+    return levels
+
+
+def _to_feedback_response(fb: FeedbackModel, ticket: Optional[TicketModel]) -> FeedbackResponse:
+    return FeedbackResponse(
+        id=fb.id,
+        ticket_id=fb.ticket_id,
+        user_id=fb.user_id,
+        rating=fb.rating,
+        comment=fb.comment or "",
+        ticket_title=ticket.title if ticket else "",
+        ticket_severity=(ticket.severity or "") if ticket else "",
+        ticket_status=(ticket.status or "") if ticket else "",
+        created_at=fb.created_at.isoformat() if fb.created_at else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -99,12 +137,7 @@ async def submit_feedback(
                 logger.error(f"Bad review escalation failed: {esc_err}")
 
         return FeedbackResponse(
-            id=fb.id,
-            ticket_id=fb.ticket_id,
-            user_id=fb.user_id,
-            rating=fb.rating,
-            comment=fb.comment or "",
-            created_at=fb.created_at.isoformat() if fb.created_at else None,
+            **_to_feedback_response(fb, ticket).model_dump()
         )
     finally:
         session.close()
@@ -121,14 +154,8 @@ async def get_feedback(
         fb = session.query(FeedbackModel).filter_by(ticket_id=ticket_id).first()
         if fb is None:
             return None
-        return FeedbackResponse(
-            id=fb.id,
-            ticket_id=fb.ticket_id,
-            user_id=fb.user_id,
-            rating=fb.rating,
-            comment=fb.comment or "",
-            created_at=fb.created_at.isoformat() if fb.created_at else None,
-        )
+        ticket = session.query(TicketModel).filter_by(ticket_id=fb.ticket_id).first()
+        return _to_feedback_response(fb, ticket)
     finally:
         session.close()
 
@@ -137,26 +164,24 @@ async def get_feedback(
 async def list_feedback(
     current_user: UserModel = Depends(require_hr),
 ):
-    """List all feedback — HR only."""
+    """List visible feedback for HR / Higher Authority."""
     session = get_db_session()
     try:
+        allowed_levels = _allowed_feedback_levels(current_user)
         rows = (
-            session.query(FeedbackModel)
+            session.query(FeedbackModel, TicketModel)
+            .outerjoin(TicketModel, TicketModel.ticket_id == FeedbackModel.ticket_id)
             .order_by(FeedbackModel.created_at.desc())
             .limit(200)
             .all()
         )
-        return [
-            FeedbackResponse(
-                id=fb.id,
-                ticket_id=fb.ticket_id,
-                user_id=fb.user_id,
-                rating=fb.rating,
-                comment=fb.comment or "",
-                created_at=fb.created_at.isoformat() if fb.created_at else None,
-            )
-            for fb in rows
-        ]
+        visible_rows = []
+        for fb, ticket in rows:
+            severity = ((ticket.severity or "") if ticket else "").lower()
+            if allowed_levels is not None and severity not in allowed_levels:
+                continue
+            visible_rows.append(_to_feedback_response(fb, ticket))
+        return visible_rows
     finally:
         session.close()
 
@@ -168,15 +193,26 @@ async def feedback_stats(
     """Get feedback summary statistics."""
     session = get_db_session()
     try:
-        rows = session.query(FeedbackModel).all()
-        if not rows:
+        allowed_levels = _allowed_feedback_levels(current_user)
+        rows = (
+            session.query(FeedbackModel, TicketModel)
+            .outerjoin(TicketModel, TicketModel.ticket_id == FeedbackModel.ticket_id)
+            .all()
+        )
+        visible = []
+        for fb, ticket in rows:
+            severity = ((ticket.severity or "") if ticket else "").lower()
+            if allowed_levels is not None and severity not in allowed_levels:
+                continue
+            visible.append((fb, ticket))
+        if not visible:
             return {"total": 0, "average_rating": 0, "rating_distribution": {}}
 
-        total = len(rows)
-        avg = round(sum(r.rating for r in rows) / total, 2)
+        total = len(visible)
+        avg = round(sum(fb.rating for fb, _ in visible) / total, 2)
         dist: dict[str, int] = {}
-        for r in rows:
-            key = str(int(r.rating))
+        for fb, _ in visible:
+            key = str(int(fb.rating))
             dist[key] = dist.get(key, 0) + 1
 
         return {
