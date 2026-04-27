@@ -5,7 +5,7 @@ Flow:  START → router → (dispatch) → agent → END
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm, get_memory_store
+from app.dependencies import get_llm, get_llm_for_agent, get_memory_store
 from orchestrator.state import HRState
 from orchestrator.router import classify_intent
 from orchestrator.dispatcher import dispatch
@@ -45,7 +45,7 @@ def run_default_agent(state: HRState) -> dict:
         }
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("default_agent")
 
         # Build conversation history string
         history_parts = []
@@ -70,13 +70,17 @@ def run_default_agent(state: HRState) -> dict:
             services.append("policy questions")
         services_str = ", ".join(services) if services else "general HR inquiries"
 
-        prompt = (
+        system_preamble = (
             "You are a friendly but strict HR assistant. Respond to the employee's "
             "message in 1–2 short sentences. If it's a greeting, greet them back and "
             f"briefly mention you can help with {services_str}. "
             "ONLY handle HR topics (complaints, leave, payroll, policy). "
             "If the message is outside HR scope, do NOT answer that content; politely "
             "state you can only help with HR topics and ask how you can help with HR."
+        )
+
+        prompt = (
+            f"{system_preamble}"
             f"{history_block}\n\n"
             f"EMPLOYEE MESSAGE:\n{state.get('message', '')}\n\n"
             "Keep it brief and natural. No filler phrases."

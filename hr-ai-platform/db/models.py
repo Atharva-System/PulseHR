@@ -283,6 +283,50 @@ class AuditLogModel(Base):
         return f"<AuditLog {self.id} type={self.event_type}>"
 
 
+class AgentConfigModel(Base):
+    """Stores per-agent LLM configuration — persisted across restarts."""
+
+    __tablename__ = "agent_configs"
+
+    id = Column(String(50), primary_key=True)  # e.g. "complaint_agent"
+    name = Column(String(100), nullable=False)
+    description = Column(Text, default="")
+    intent = Column(String(50), nullable=False)
+    is_active = Column(Boolean, default=True, index=True)
+    model_name = Column(String(200), nullable=False)
+    temperature = Column(Float, default=1.0)
+    top_p = Column(Float, default=1.0)
+    max_tokens = Column(Float, default=4096)
+    updated_by = Column(String(50), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentConfig {self.id} model={self.model_name}>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "intent": self.intent,
+            "is_active": self.is_active,
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "max_tokens": int(self.max_tokens),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "updated_by": self.updated_by,
+        }
+
+
 class AppNotificationModel(Base):
     """In-app notifications for HR / authority users."""
 

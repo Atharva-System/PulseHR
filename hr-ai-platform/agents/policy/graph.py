@@ -5,7 +5,7 @@ Flow:  search_policy → respond
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm, get_memory_store
+from app.dependencies import get_llm_for_agent, get_memory_store
 from agents.policy.tools import search_policies
 from memory.schemas import ConversationEntry
 from orchestrator.state import HRState
@@ -64,7 +64,7 @@ def respond_node(state: HRState) -> dict:
     trace_id = state.get("trace_id", "N/A")
     logger.info(f"[{trace_id}] Entering policy/respond_node")
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("policy_agent")
         policy_info = state.get("metadata", {}).get(
             "policy_info", "No policy information available"
         )

@@ -1,6 +1,6 @@
 """Complaint classifier — detects type, emotion, severity via LLM."""
 
-from app.dependencies import get_llm
+from app.dependencies import get_llm_for_agent
 from agents.complaint.prompts import CLASSIFIER_PROMPT
 from agents.complaint.schemas import ComplaintClassification
 from orchestrator.state import HRState
@@ -21,7 +21,7 @@ def classify_complaint(state: HRState) -> dict:
     logger.info(f"[{trace_id}] Classifying complaint for user {user_id}")
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         structured_llm = llm.with_structured_output(ComplaintClassification)
 
         prompt = CLASSIFIER_PROMPT.format(message=message)

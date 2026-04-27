@@ -11,7 +11,7 @@ Graph flow:
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm, get_memory_store
+from app.dependencies import get_llm, get_llm_for_agent, get_memory_store
 from agents.complaint.classifier import classify_complaint
 from agents.complaint.escalation import handle_escalation
 from agents.complaint.prompts import (
@@ -128,7 +128,7 @@ def safety_check_node(state: HRState) -> dict:
     trace_id = state.get("trace_id", "N/A")
     logger.info(f"[{trace_id}] Entering safety_check_node")
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         structured_llm = llm.with_structured_output(SafetyCheckResult)
         prompt = SAFETY_CHECK_PROMPT.format(
             message=state.get("message", ""),
@@ -192,7 +192,7 @@ def policy_check_node(state: HRState) -> dict:
         # Search policies relevant to the complaint
         policy_info = search_policies(message, trace_id=trace_id)
 
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         structured_llm = llm.with_structured_output(PolicyViolationResult)
         prompt = POLICY_VIOLATION_CHECK_PROMPT.format(
             message=message,
@@ -304,7 +304,7 @@ def check_completeness_node(state: HRState) -> dict:
         }
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         structured_llm = llm.with_structured_output(InfoCompletenessResult)
         prompt = INFO_COMPLETENESS_PROMPT.format(
             conversation_history=history if history else "(This is the first message)",
@@ -357,7 +357,7 @@ def ask_followup_node(state: HRState) -> dict:
     severity = state.get("severity", "medium")
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         prompt = FOLLOWUP_PROMPT.format(
             conversation_history=history if history else "(First message)",
             message=message,
@@ -406,7 +406,7 @@ def ask_confirmation_node(state: HRState) -> dict:
         )
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         prompt = CONFIRMATION_PROMPT.format(
             conversation_history=history if history else "(First message)",
             message=message,
@@ -446,7 +446,7 @@ def generate_summary_node(state: HRState) -> dict:
         full_history = f"Employee: {message}"
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         prompt = TICKET_SUMMARY_PROMPT.format(conversation_history=full_history)
         ai_message = llm.invoke(prompt)
         raw_text = ai_message.content.strip()
@@ -548,7 +548,7 @@ def generate_warm_closing_node(state: HRState) -> dict:
     logger.info(f"[{trace_id}] Generating warm closing message")
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         prompt = WARM_CLOSING_PROMPT.format(
             complaint_type=state.get("complaint_type", "other"),
             emotion=state.get("emotion", "neutral"),
@@ -723,7 +723,7 @@ def ticket_check_node(state: HRState) -> dict:
     logger.info(f"[{trace_id}] Checking ticket context for dissatisfaction")
 
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         structured_llm = llm.with_structured_output(DissatisfactionCheckResult)
 
         # Build ticket context string
@@ -810,7 +810,7 @@ def handle_dissatisfaction_node(state: HRState) -> dict:
 
     # Generate empathetic response via LLM
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("complaint_agent")
         prompt = DISSATISFACTION_RESPONSE_PROMPT.format(
             ticket_id=ticket_id,
             ticket_title=ticket_title,

@@ -1,4 +1,4 @@
-export type PrivacyMode = "identified" | "confidential" | "anonymous";
+export type PrivacyMode = "confidential" | "anonymous";
 
 export interface User {
   id: string;
@@ -161,8 +161,42 @@ export interface AgentConfig {
   description: string;
   intent: string;
   is_active: boolean;
+  model_name: string;
+  temperature: number;
+  top_p: number;
+  max_tokens: number;
   updated_at: string | null;
   updated_by: string | null;
+}
+
+export interface UpdateAgentPayload {
+  is_active?: boolean;
+  model_name?: string;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  category:
+    | "recommended"
+    | "large"
+    | "medium"
+    | "small"
+    | "code"
+    | "vision"
+    | "other";
+  context_window: number | null;
+  description: string;
+  available: boolean;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+  live_check: boolean;
 }
 
 export interface MyConversation {

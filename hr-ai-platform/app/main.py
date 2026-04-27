@@ -24,6 +24,7 @@ from api.routes.policies import router as policies_router
 from api.routes.messages import router as messages_router
 from db.connection import get_engine, get_db_session
 from db.models import Base, UserModel
+from db.repositories.agent_config_repo import seed_agent_configs
 from escalation.sla_checker import sla_checker_loop
 from utils.logger import get_logger
 
@@ -131,6 +132,13 @@ def create_app() -> FastAPI:
                         )
             finally:
                 session.close()
+
+            # Seed default agent configs (idempotent — only inserts missing rows)
+            try:
+                seed_agent_configs(default_model=settings.model_name)
+                logger.info("Agent configs seeded / verified")
+            except Exception as e:
+                logger.warning("Agent config seeding failed: %s", e)
 
         logger.info(
             f"{settings.app_name} v{settings.app_version} starting — "

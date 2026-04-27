@@ -19,6 +19,7 @@ import {
   notificationsApi,
   feedbackApi,
 } from "@/api/services";
+import type { UpdateAgentPayload } from "@/types";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 export const QK = {
@@ -31,6 +32,7 @@ export const QK = {
   reportAgents: (days: number) => ["reportAgents", days] as const,
   users: (params?: object) => ["users", params ?? {}] as const,
   agents: () => ["agents"] as const,
+  agentModels: () => ["agentModels"] as const,
   convUsers: () => ["convUsers"] as const,
   conversations: (userId: string) => ["conversations", userId] as const,
   myTickets: () => ["myTickets"] as const,
@@ -176,11 +178,33 @@ export function useAgents() {
   });
 }
 
+export function useAvailableModels() {
+  return useQuery({
+    queryKey: QK.agentModels(),
+    queryFn: () => agentsApi.models().then((r) => r.data),
+    staleTime: 10 * 60 * 1000, // 10 min – model list rarely changes
+  });
+}
+
 export function useToggleAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       agentsApi.toggle(id, is_active),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
+export function useUpdateAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: UpdateAgentPayload;
+    }) => agentsApi.update(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
   });
 }

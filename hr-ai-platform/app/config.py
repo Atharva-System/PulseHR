@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     smtp_to_authority: str = "authority@company.com"
 
     # Initial admin seed for new databases
-    admin_username: str = "admin"
+    admin_username: str = "ceo@1"
     admin_email: str = "admin@yopmail.com"
     admin_full_name: str = "Administrator"
     admin_password: str = "admin123"

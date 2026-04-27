@@ -5,7 +5,7 @@ Flow:  parse_query → fetch_data → respond
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm, get_memory_store
+from app.dependencies import get_llm_for_agent, get_memory_store
 from agents.payroll.prompts import PAYROLL_RESPONSE_PROMPT
 from agents.payroll.tools import fetch_salary_info
 from memory.schemas import ConversationEntry
@@ -49,7 +49,7 @@ def respond_node(state: HRState) -> dict:
     trace_id = state.get("trace_id", "N/A")
     logger.info(f"[{trace_id}] Entering payroll/respond_node")
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("payroll_agent")
         salary_info = state.get("metadata", {}).get(
             "salary_info", "No salary information available"
         )

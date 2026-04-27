@@ -10,7 +10,7 @@ import json
 import re
 import traceback
 
-from app.dependencies import get_llm
+from app.dependencies import get_llm, get_llm_for_agent
 from orchestrator.state import HRState
 from utils.logger import get_logger
 

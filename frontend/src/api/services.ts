@@ -14,6 +14,8 @@ import type {
   AgentReport,
   NotificationsResponse,
   AgentConfig,
+  UpdateAgentPayload,
+  ModelsResponse,
   MyConversation,
   MyTicket,
   Feedback,
@@ -115,8 +117,11 @@ export const notificationsApi = {
 // ── Agents ───────────────────────────────────────────────────────────────
 export const agentsApi = {
   list: () => api.get<AgentConfig[]>("/api/agents"),
+  update: (id: string, payload: UpdateAgentPayload) =>
+    api.patch<AgentConfig>(`/api/agents/${id}`, payload),
   toggle: (id: string, is_active: boolean) =>
     api.patch<AgentConfig>(`/api/agents/${id}`, { is_active }),
+  models: () => api.get<ModelsResponse>("/api/agents/models"),
 };
 
 // ── My (user-facing) ─────────────────────────────────────────────────────

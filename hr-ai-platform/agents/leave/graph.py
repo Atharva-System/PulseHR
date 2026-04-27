@@ -5,7 +5,7 @@ Flow:  parse_request → check_balance → respond
 
 from langgraph.graph import StateGraph, START, END
 
-from app.dependencies import get_llm, get_memory_store
+from app.dependencies import get_llm_for_agent, get_memory_store
 from agents.leave.prompts import LEAVE_RESPONSE_PROMPT
 from agents.leave.tools import check_leave_balance
 from memory.schemas import ConversationEntry
@@ -49,7 +49,7 @@ def respond_node(state: HRState) -> dict:
     trace_id = state.get("trace_id", "N/A")
     logger.info(f"[{trace_id}] Entering leave/respond_node")
     try:
-        llm = get_llm()
+        llm = get_llm_for_agent("leave_agent")
         balance_info = state.get("metadata", {}).get("leave_balance", "No balance info available")
 
         # Build conversation history string

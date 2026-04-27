@@ -104,7 +104,7 @@ Make sure the database exists and the user has the correct permissions.
 
 When the backend starts with a fresh database, it automatically creates a default admin account if one does not already exist.
 
-- Username: `admin`
+- Username: `ceo@1`
 - Password: `admin123`
 - Role: `higher_authority`
 
