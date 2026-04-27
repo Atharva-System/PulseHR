@@ -59,10 +59,6 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 const PRIVACY_CONFIG: Record<string, { label: string; className: string }> = {
-  identified: {
-    label: "Identified",
-    className: "bg-slate-100 text-slate-700",
-  },
   confidential: {
     label: "Confidential",
     className: "bg-indigo-100 text-indigo-700",
@@ -226,7 +222,7 @@ export default function MyTicketsPage() {
                   SEVERITY_COLORS[ticket.severity] || SEVERITY_COLORS["medium"];
                 const privacyCfg =
                   PRIVACY_CONFIG[ticket.privacy_mode] ||
-                  PRIVACY_CONFIG.identified;
+                  PRIVACY_CONFIG.confidential;
 
                 return (
                   <div

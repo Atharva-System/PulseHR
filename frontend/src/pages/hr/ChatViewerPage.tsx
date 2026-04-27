@@ -24,11 +24,6 @@ const PRIVACY_BADGE: Record<
   string,
   { label: string; icon: typeof Shield; className: string }
 > = {
-  identified: {
-    label: "Identified",
-    icon: Shield,
-    className: "bg-slate-100 text-slate-600",
-  },
   confidential: {
     label: "Confidential",
     icon: Lock,
@@ -74,8 +69,8 @@ export default function ChatViewerPage() {
   const selectedUserMeta =
     users.find((u) => (u.lookup_user_id || u.user_id) === selectedUser) || null;
   const selectedUserLabel = selectedUserMeta?.user_id || selectedUser;
-  const selectedPrivacy = selectedUserMeta?.privacy_mode || "identified";
-  const badge = PRIVACY_BADGE[selectedPrivacy] || PRIVACY_BADGE.identified;
+  const selectedPrivacy = selectedUserMeta?.privacy_mode || "confidential";
+  const badge = PRIVACY_BADGE[selectedPrivacy] || PRIVACY_BADGE.confidential;
   const BadgeIcon = badge.icon;
 
   // Content is hidden when messages array is empty but user was selected
@@ -121,10 +116,10 @@ export default function ChatViewerPage() {
               </p>
             ) : (
               filteredUsers.map((u) => {
-                // Admin sees privacy badges; HR only sees identified users (no hints)
+                // Admin sees privacy badges.
                 const isAdmin = currentUser?.role === "higher_authority";
                 const pBadge =
-                  PRIVACY_BADGE[u.privacy_mode] || PRIVACY_BADGE.identified;
+                  PRIVACY_BADGE[u.privacy_mode] || PRIVACY_BADGE.confidential;
                 const PIcon = pBadge.icon;
                 const canClick = !!u.lookup_user_id;
 
@@ -151,7 +146,7 @@ export default function ChatViewerPage() {
                         {u.user_id}
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        {isAdmin && u.privacy_mode !== "identified" && (
+                        {isAdmin && (
                           <span
                             className={cn(
                               "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
@@ -215,7 +210,8 @@ export default function ChatViewerPage() {
                     {messages.length} messages
                   </p>
                 </div>
-                {selectedPrivacy !== "identified" && (
+                {(selectedPrivacy === "confidential" ||
+                  selectedPrivacy === "anonymous") && (
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",

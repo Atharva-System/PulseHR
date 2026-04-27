@@ -170,7 +170,9 @@ export default function TicketDetailPage() {
 
   const slaStatus = getSlaStatus();
   const slaConfig = slaStatus ? slaStatusConfig[slaStatus] : null;
-  const isProtectedIdentity = ticket.privacy_mode !== "identified";
+  const isProtectedIdentity =
+    ticket.privacy_mode === "confidential" ||
+    ticket.privacy_mode === "anonymous";
   const privacyLabel =
     ticket.privacy_mode.charAt(0).toUpperCase() + ticket.privacy_mode.slice(1);
   const isAnonymous = ticket.privacy_mode === "anonymous";
