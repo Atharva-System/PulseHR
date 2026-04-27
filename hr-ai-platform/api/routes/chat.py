@@ -48,7 +48,7 @@ def _load_ticket_context(user_id: str) -> dict:
             session.query(TicketModel)
             .filter(TicketModel.user_id == user_id)
             .order_by(TicketModel.created_at.desc())
-            .limit(10)
+            .limit(20)
             .all()
         )
 
@@ -159,7 +159,7 @@ async def chat(
             session.query(ConversationModel)
             .filter(ConversationModel.user_id == user_id)
             .order_by(ConversationModel.timestamp.desc())
-            .limit(5)
+            .limit(10)
             .all()
         )
         session.close()
@@ -168,6 +168,7 @@ async def chat(
             {"role": "user", "content": r.message, "role2": "assistant", "content2": r.response}
             for r in rows
         ]
+        logger.info(f"[{trace_id}] Loaded {len(conversation_history)} history turns for user {user_id}")
     except Exception as e:
         logger.warning(f"Could not load conversation history: {e}")
 

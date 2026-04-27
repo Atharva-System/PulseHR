@@ -115,17 +115,18 @@ def _load_max_severity(user_id: str, thread_id: str) -> str:
 
 def _extract_name(text: str) -> str:
     patterns = [
-        r"\b(?:manager|colleague|supervisor|team lead|lead|hr|director)\s+([A-Z][a-z]+)\b",
-        r"\b([A-Z][a-z]+)\s+(?:from|in|of)\s+([A-Za-z]+)\b",
-        r"\b(?:about|named|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b",
+        r"\b(?:manager|colleague|supervisor|team lead|lead|hr|director)\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)\b",
+        r"\b([A-Za-z][A-Za-z'-]+)\s+(?:from|in|of)\s+([A-Za-z][A-Za-z'-]+)\b",
+        r"\b(?:about|against|regarding|named|called)\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)\b",
+        r"\b(?:name\s+is|name\s+as|manager's\s+name\s+is)\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)\b",
     ]
     for pattern in patterns:
-        match = re.search(pattern, text)
+        match = re.search(pattern, text, re.IGNORECASE)
         if not match:
             continue
         if len(match.groups()) == 2:
-            return f"{match.group(1)} {match.group(2)}".strip()
-        return match.group(1).strip()
+            return f"{match.group(1)} {match.group(2)}".strip().title()
+        return match.group(1).strip().title()
     return ""
 
 
@@ -333,16 +334,6 @@ def check_completeness_node(state: HRState) -> dict:
             already_asked_confirmation = any(p in last_bot_msg for p in confirmation_phrases)
 
     if already_asked_confirmation:
-        if rule_missing:
-            logger.info(f"[{trace_id}] Confirmation reply received but required info still missing")
-            return {
-                "severity": severity,
-                "metadata": {
-                    **metadata,
-                    "_info_status": "GATHERING",
-                    "_missing_info": rule_missing,
-                }
-            }
         logger.info(f"[{trace_id}] User confirmed after confirmation prompt → COMPLETE")
         return {
             "severity": severity,
@@ -358,16 +349,6 @@ def check_completeness_node(state: HRState) -> dict:
     # for the person's name, what happened, and when.
     max_exchanges = 3 if severity in ("critical", "high") else 4
     if exchange_count >= max_exchanges:
-        if rule_missing:
-            logger.info(f"[{trace_id}] Exchange cap reached but required info still missing: {rule_missing}")
-            return {
-                "severity": severity,
-                "metadata": {
-                    **metadata,
-                    "_info_status": "GATHERING",
-                    "_missing_info": rule_missing,
-                }
-            }
         logger.info(f"[{trace_id}] {exchange_count} exchanges reached (max={max_exchanges}) → forcing CONFIRMING")
         return {
             "severity": severity,
@@ -386,23 +367,26 @@ def check_completeness_node(state: HRState) -> dict:
             message=message,
         )
         result: InfoCompletenessResult = structured_llm.invoke(prompt)
-        logger.info(f"[{trace_id}] Completeness: status={result.status}, missing={result.missing_info}")
-        merged_missing = list(dict.fromkeys([*rule_missing, *result.missing_info]))
+        logger.info(f"[{trace_id}] Completeness (LLM-first): status={result.status}, llm_missing={result.missing_info}, rule_missing={rule_missing}")
+        llm_missing = list(dict.fromkeys(result.missing_info or []))
 
-        # Hard override: first message is ALWAYS GATHERING
+        # LLM-first policy:
+        # - Trust model status/missing by default.
+        # - Use rule-based missing only as fallback when LLM returns GATHERING
+        #   but provides no actionable missing list.
         if is_first_message:
             final_status = "GATHERING"
-            final_missing = merged_missing
-        elif merged_missing:
+            final_missing = llm_missing or rule_missing
+        elif result.status == "GATHERING":
             final_status = "GATHERING"
-            final_missing = merged_missing
+            final_missing = llm_missing or rule_missing
         elif result.status == "COMPLETE":
-            # LLM says complete, but we haven't asked confirmation yet → CONFIRMING
+            # LLM says complete, ask one confirmation before ticket creation.
             final_status = "CONFIRMING"
             final_missing = []
         else:
             final_status = result.status
-            final_missing = merged_missing
+            final_missing = llm_missing
 
         return {
             "metadata": {
