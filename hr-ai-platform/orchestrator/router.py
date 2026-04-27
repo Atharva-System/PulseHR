@@ -12,6 +12,7 @@ import traceback
 
 from app.dependencies import get_llm, get_llm_for_agent
 from orchestrator.state import HRState
+from utils.context import build_compact_history
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -158,11 +159,11 @@ def classify_intent(state: HRState) -> dict:
         llm = get_llm()
 
         # Build conversation history string for context
-        history_parts = []
-        for entry in state.get("conversation_history", []):
-            history_parts.append(f"Employee: {entry.get('content', '')}")
-            history_parts.append(f"HR Assistant: {entry.get('content2', '')}")
-        history_str = "\n".join(history_parts) if history_parts else "(none)"
+        history_str = build_compact_history(
+            state.get("conversation_history", []),
+            max_turns=3,
+            max_chars_per_message=220,
+        )
 
         # ---------- Programmatic guard: ticket already created ----------
         last_bot_msg = ""

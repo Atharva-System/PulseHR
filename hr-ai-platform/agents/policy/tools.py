@@ -249,11 +249,15 @@ def _search_db_policies(policies, query: str, trace_id: str) -> str:
             results.append(f"**{title}**:\n{text}")
         return "\n\n---\n\n".join(results)
 
-    # No keyword match — return all active policies
-    logger.info(f"[{trace_id}] No keyword match in DB policies, returning all")
+    # No keyword match — return only a small fallback set instead of the whole corpus
+    logger.info(f"[{trace_id}] No keyword match in DB policies, returning compact fallback")
     results = []
-    for p in policies:
+    for p in policies[:2]:
         results.append(f"**{p.title}**:\n{p.content}")
+    results.append(
+        "**Search note**:\nNo direct policy match was found for the query. "
+        "Answer cautiously and say when the policy text is not explicit."
+    )
     return "\n\n---\n\n".join(results)
 
 
@@ -276,9 +280,15 @@ def _search_hardcoded_policies(query: str, trace_id: str) -> str:
             results.append(f"**{title}**:\n{text}")
         return "\n\n---\n\n".join(results)
 
-    logger.info(f"[{trace_id}] No keyword match, returning full policy")
+    logger.info(f"[{trace_id}] No keyword match, returning compact fallback")
+    fallback_keys = ("leave_policy_overview", "minimum_working_hours")
     results = []
-    for key, text in _POLICIES.items():
+    for key in fallback_keys:
+        text = _POLICIES[key]
         title = key.replace("_", " ").title()
         results.append(f"**{title}**:\n{text}")
+    results.append(
+        "**Search note**:\nNo direct policy match was found for the query. "
+        "Answer cautiously and say when the policy text is not explicit."
+    )
     return "\n\n---\n\n".join(results)

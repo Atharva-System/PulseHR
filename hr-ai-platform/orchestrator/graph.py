@@ -16,6 +16,7 @@ from agents.payroll.agent import run_payroll_agent
 from agents.policy.agent import run_policy_agent
 from memory.schemas import ConversationEntry
 from utils.logger import get_logger
+from utils.context import build_compact_history
 
 logger = get_logger(__name__)
 
@@ -48,14 +49,14 @@ def run_default_agent(state: HRState) -> dict:
         llm = get_llm_for_agent("default_agent")
 
         # Build conversation history string
-        history_parts = []
-        for entry in state.get("conversation_history", []):
-            history_parts.append(f"Employee: {entry.get('content', '')}")
-            history_parts.append(f"HR Assistant: {entry.get('content2', '')}")
-        history_str = "\n".join(history_parts) if history_parts else ""
+        history_str = build_compact_history(
+            state.get("conversation_history", []),
+            max_turns=3,
+            max_chars_per_message=220,
+        )
 
         history_block = ""
-        if history_str:
+        if history_str and history_str != "(none)":
             history_block = f"\n\nRECENT CONVERSATION HISTORY:\n{history_str}\n"
 
         # Build list of currently active services
@@ -100,9 +101,12 @@ def run_default_agent(state: HRState) -> dict:
                 intent=state.get("intent", "general_query"),
                 agent_used="default_agent",
                 privacy_mode=state.get("privacy_mode", "identified"),
+                thread_id=state.get("thread_id", ""),
                 trace_id=trace_id,
             )
-            store.save_conversation(entry)
+            saved = store.save_conversation(entry)
+            if not saved:
+                logger.warning(f"[{trace_id}] Default agent conversation was not persisted")
         except Exception as save_err:
             logger.warning(f"[{trace_id}] Failed to save default agent conversation: {save_err}")
 

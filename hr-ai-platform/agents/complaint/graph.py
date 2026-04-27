@@ -9,6 +9,7 @@ Graph flow:
                 if COMPLETE:  generate_summary → escalate → enrich_response → save_to_memory
 """
 
+import re
 from langgraph.graph import StateGraph, START, END
 
 from app.dependencies import get_llm, get_llm_for_agent, get_memory_store
@@ -37,6 +38,7 @@ from memory.schemas import ConversationEntry
 from orchestrator.state import HRState
 from db.connection import get_db_session
 from db.models import ConversationModel, TicketModel
+from utils.context import build_compact_history, strip_ticket_notice
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,35 +48,36 @@ logger = get_logger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_recent_complaint_history(user_id: str, limit: int = 10) -> str:
-    """Load recent complaint conversations for the user from DB."""
+def _load_recent_complaint_history(user_id: str, thread_id: str, limit: int = 8) -> str:
+    """Load recent complaint conversations for the active complaint thread."""
     session = get_db_session()
     try:
-        rows = (
+        q = (
             session.query(ConversationModel)
             .filter(
                 ConversationModel.user_id == user_id,
                 ConversationModel.intent == "employee_complaint",
             )
-            .order_by(ConversationModel.timestamp.desc())
-            .limit(limit)
-            .all()
         )
+        if thread_id:
+            q = q.filter(ConversationModel.thread_id == thread_id)
+
+        rows = q.order_by(ConversationModel.timestamp.desc()).limit(limit).all()
         if not rows:
             return ""
 
         rows.reverse()  # chronological order
-        parts = []
-        for r in rows:
-            parts.append(f"Employee: {r.message}")
-            parts.append(f"HR Assistant: {r.response}")
-        return "\n".join(parts)
+        entries = [
+            {"content": r.message, "content2": strip_ticket_notice(r.response or "")}
+            for r in rows
+        ]
+        return build_compact_history(entries, max_turns=limit, max_chars_per_message=260)
     finally:
         session.close()
 
 
-def _load_max_severity(user_id: str) -> str:
-    """Load the highest severity from recent complaint conversations.
+def _load_max_severity(user_id: str, thread_id: str) -> str:
+    """Load the highest severity from recent complaint conversations in a thread.
 
     This prevents short follow-up messages like 'no' or 'ok' from
     downgrading the severity that was set during the original complaint.
@@ -82,7 +85,7 @@ def _load_max_severity(user_id: str) -> str:
     severity_order = ["low", "medium", "high", "critical"]
     session = get_db_session()
     try:
-        rows = (
+        q = (
             session.query(ConversationModel.severity)
             .filter(
                 ConversationModel.user_id == user_id,
@@ -90,10 +93,11 @@ def _load_max_severity(user_id: str) -> str:
                 ConversationModel.severity != "",
                 ConversationModel.severity.isnot(None),
             )
-            .order_by(ConversationModel.timestamp.desc())
-            .limit(10)
-            .all()
         )
+        if thread_id:
+            q = q.filter(ConversationModel.thread_id == thread_id)
+
+        rows = q.order_by(ConversationModel.timestamp.desc()).limit(10).all()
         if not rows:
             return ""
 
@@ -107,6 +111,54 @@ def _load_max_severity(user_id: str) -> str:
         return severity_order[max_idx] if max_idx >= 0 else ""
     finally:
         session.close()
+
+
+def _extract_name(text: str) -> str:
+    patterns = [
+        r"\b(?:manager|colleague|supervisor|team lead|lead|hr|director)\s+([A-Z][a-z]+)\b",
+        r"\b([A-Z][a-z]+)\s+(?:from|in|of)\s+([A-Za-z]+)\b",
+        r"\b(?:about|named|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        if len(match.groups()) == 2:
+            return f"{match.group(1)} {match.group(2)}".strip()
+        return match.group(1).strip()
+    return ""
+
+
+def _has_time_reference(text: str) -> bool:
+    time_patterns = (
+        r"\b(today|yesterday|tonight|this morning|this evening)\b",
+        r"\b(last|this|next)\s+(week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+        r"\b\d{1,2}[:/.-]\d{1,2}(?:[:/.-]\d{2,4})?\b",
+        r"\b\d{1,2}\s*(?:am|pm)\b",
+        r"\b(always|often|daily|weekly|repeatedly|every day|every week)\b",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in time_patterns)
+
+
+def _has_incident_detail(text: str) -> bool:
+    keywords = (
+        "harass", "threat", "shout", "yell", "insult", "touch", "bully",
+        "discrimin", "humiliat", "retaliat", "abuse", "misbehav", "scream",
+    )
+    normalized = " ".join(text.split())
+    return len(normalized.split()) >= 6 or any(keyword in normalized.lower() for keyword in keywords)
+
+
+def _required_missing_info(history: str, message: str) -> list[str]:
+    combined = "\n".join(part for part in (history, message) if part).strip()
+    missing: list[str] = []
+    if not _extract_name(combined):
+        missing.append("person's name")
+    if not _has_incident_detail(combined):
+        missing.append("what happened")
+    if not _has_time_reference(combined):
+        missing.append("when it happened")
+    return missing
 
 
 # ---------------------------------------------------------------------------
@@ -151,13 +203,14 @@ def load_history_node(state: HRState) -> dict:
     """Node: load recent complaint conversation history for this user."""
     trace_id = state.get("trace_id", "N/A")
     user_id = state.get("user_id", "unknown")
+    thread_id = state.get("thread_id", "")
     logger.info(f"[{trace_id}] Loading complaint history for {user_id}")
 
-    history = _load_recent_complaint_history(user_id)
+    history = _load_recent_complaint_history(user_id, thread_id)
 
     # Also load the highest severity from previous conversation turns
     # so short follow-up messages ("no", "ok") don't downgrade it
-    stored_severity = _load_max_severity(user_id)
+    stored_severity = _load_max_severity(user_id, thread_id)
 
     return {
         "metadata": {
@@ -261,6 +314,8 @@ def check_completeness_node(state: HRState) -> dict:
     else:
         logger.info(f"[{trace_id}] Exchange count: {exchange_count}")
 
+    rule_missing = _required_missing_info(history, message)
+
     # Check if we already asked for confirmation last time
     already_asked_confirmation = False
     if history and not is_first_message:
@@ -278,6 +333,16 @@ def check_completeness_node(state: HRState) -> dict:
             already_asked_confirmation = any(p in last_bot_msg for p in confirmation_phrases)
 
     if already_asked_confirmation:
+        if rule_missing:
+            logger.info(f"[{trace_id}] Confirmation reply received but required info still missing")
+            return {
+                "severity": severity,
+                "metadata": {
+                    **metadata,
+                    "_info_status": "GATHERING",
+                    "_missing_info": rule_missing,
+                }
+            }
         logger.info(f"[{trace_id}] User confirmed after confirmation prompt → COMPLETE")
         return {
             "severity": severity,
@@ -293,6 +358,16 @@ def check_completeness_node(state: HRState) -> dict:
     # for the person's name, what happened, and when.
     max_exchanges = 3 if severity in ("critical", "high") else 4
     if exchange_count >= max_exchanges:
+        if rule_missing:
+            logger.info(f"[{trace_id}] Exchange cap reached but required info still missing: {rule_missing}")
+            return {
+                "severity": severity,
+                "metadata": {
+                    **metadata,
+                    "_info_status": "GATHERING",
+                    "_missing_info": rule_missing,
+                }
+            }
         logger.info(f"[{trace_id}] {exchange_count} exchanges reached (max={max_exchanges}) → forcing CONFIRMING")
         return {
             "severity": severity,
@@ -312,18 +387,22 @@ def check_completeness_node(state: HRState) -> dict:
         )
         result: InfoCompletenessResult = structured_llm.invoke(prompt)
         logger.info(f"[{trace_id}] Completeness: status={result.status}, missing={result.missing_info}")
+        merged_missing = list(dict.fromkeys([*rule_missing, *result.missing_info]))
 
         # Hard override: first message is ALWAYS GATHERING
         if is_first_message:
             final_status = "GATHERING"
-            final_missing = result.missing_info
+            final_missing = merged_missing
+        elif merged_missing:
+            final_status = "GATHERING"
+            final_missing = merged_missing
         elif result.status == "COMPLETE":
             # LLM says complete, but we haven't asked confirmation yet → CONFIRMING
             final_status = "CONFIRMING"
             final_missing = []
         else:
             final_status = result.status
-            final_missing = result.missing_info
+            final_missing = merged_missing
 
         return {
             "metadata": {
@@ -597,7 +676,7 @@ def enrich_response_node(state: HRState) -> dict:
     response = state.get("response", "")
     privacy_mode = state.get("privacy_mode", "identified")
 
-    if ticket_id and escalation_action in ("create_ticket", "notify_hr"):
+    if ticket_id and escalation_action in ("create_ticket", "notify_hr", "escalate_to_admin"):
         severity = state.get("severity", "medium")
         severity_label = severity.upper()
         severity_emoji = {"low": "🟢", "medium": "🟡", "high": "🟠", "critical": "🔴"}.get(severity, "🟡")
@@ -657,11 +736,17 @@ def save_to_memory_node(state: HRState) -> dict:
             severity=state.get("severity", ""),
             agent_used=state.get("agent_used", "complaint_agent"),
             privacy_mode=state.get("privacy_mode", "identified"),
+            thread_id=state.get("thread_id", ""),
             trace_id=trace_id,
         )
-        store.save_conversation(entry)
+        saved = store.save_conversation(entry)
         logger.info(f"[{trace_id}] Conversation saved to memory")
-        return {}
+        return {
+            "metadata": {
+                **state.get("metadata", {}),
+                "memory_persisted": bool(saved),
+            }
+        }
     except Exception as e:
         logger.error(f"[{trace_id}] Error in save_to_memory_node: {e}")
         return {}

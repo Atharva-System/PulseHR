@@ -21,6 +21,7 @@ class ConversationEntry(BaseModel):
     severity: str = ""
     agent_used: str = ""
     privacy_mode: str = "identified"
+    thread_id: str = ""
     trace_id: str = ""
     timestamp: str = Field(default_factory=get_timestamp)
 
@@ -35,6 +36,7 @@ class ComplaintRecord(BaseModel):
     emotion: str = ""
     severity: str = ""
     privacy_mode: str = "identified"
+    thread_id: str = ""
     complaint_target: str = ""
     escalation_action: str = ""
     ticket_id: str = ""

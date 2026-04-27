@@ -24,6 +24,7 @@ def create_ticket(
     assignee: str = "hr-team",
     user_id: str = "",
     privacy_mode: str = "identified",
+    thread_id: str = "",
     complaint_target: str = "",
     trace_id: str = "",
 ) -> str:
@@ -58,6 +59,7 @@ def create_ticket(
                 description=description,
                 severity=severity,
                 privacy_mode=privacy_mode,
+                thread_id=thread_id,
                 complaint_target=complaint_target,
                 assignee=assignee,
                 status="open",

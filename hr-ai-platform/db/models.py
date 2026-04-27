@@ -87,6 +87,7 @@ class ConversationModel(Base):
     severity = Column(String(20), default="")
     agent_used = Column(String(50), default="")
     privacy_mode = Column(String(20), default="identified", index=True)
+    thread_id = Column(String(20), default="", index=True)
     trace_id = Column(String(50), default="", index=True)
     timestamp = Column(
         DateTime(timezone=True),
@@ -114,6 +115,7 @@ class ComplaintModel(Base):
     emotion = Column(String(50), default="")
     severity = Column(String(20), default="", index=True)
     privacy_mode = Column(String(20), default="identified", index=True)
+    thread_id = Column(String(20), default="", index=True)
     complaint_target = Column(String(200), default="")
     escalation_action = Column(String(30), default="")
     ticket_id = Column(String(20), default="")
@@ -143,6 +145,7 @@ class TicketModel(Base):
     description = Column(Text, default="")
     severity = Column(String(20), default="", index=True)
     privacy_mode = Column(String(20), default="identified", index=True)
+    thread_id = Column(String(20), default="", index=True)
     complaint_target = Column(String(200), default="")
     assignee = Column(String(100), default="hr-team")
     assignee_id = Column(String(36), nullable=True)       # FK-style to users.id

@@ -58,12 +58,24 @@ def create_app() -> FastAPI:
                         "privacy_mode VARCHAR(20) DEFAULT 'identified'"
                     ))
                     conn.execute(text(
+                        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS "
+                        "thread_id VARCHAR(20) DEFAULT ''"
+                    ))
+                    conn.execute(text(
                         "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
                         "privacy_mode VARCHAR(20) DEFAULT 'identified'"
                     ))
                     conn.execute(text(
+                        "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS "
+                        "thread_id VARCHAR(20) DEFAULT ''"
+                    ))
+                    conn.execute(text(
                         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "
                         "privacy_mode VARCHAR(20) DEFAULT 'identified'"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "
+                        "thread_id VARCHAR(20) DEFAULT ''"
                     ))
                     conn.execute(text(
                         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS "

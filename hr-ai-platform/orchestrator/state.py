@@ -14,6 +14,7 @@ class HRState(TypedDict, total=False):
     user_id: str
     message: str
     privacy_mode: str
+    thread_id: str
 
     # --- Router output ---
     intent: str

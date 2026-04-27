@@ -24,6 +24,7 @@ def handle_escalation(state: HRState) -> dict:
     complaint_type = state.get("complaint_type", "other")
     emotion = state.get("emotion", "neutral")
     privacy_mode = state.get("privacy_mode", "identified")
+    thread_id = state.get("thread_id", "")
     complaint_target = state.get("complaint_target", "")
     hr_targeted = bool(complaint_target and is_complaint_about_hr(complaint_target))
 
@@ -41,6 +42,7 @@ def handle_escalation(state: HRState) -> dict:
                 severity=severity,
                 message=message,
                 privacy_mode=privacy_mode,
+                thread_id=thread_id,
                 complaint_target=complaint_target,
                 trace_id=trace_id,
             )
@@ -71,6 +73,7 @@ def handle_escalation(state: HRState) -> dict:
                 severity=severity,
                 message=message,
                 privacy_mode=privacy_mode,
+                thread_id=thread_id,
                 complaint_target=complaint_target,
                 trace_id=trace_id,
             )
@@ -81,18 +84,20 @@ def handle_escalation(state: HRState) -> dict:
                 severity=severity,
                 message=message,
                 privacy_mode=privacy_mode,
+                thread_id=thread_id,
                 complaint_target=complaint_target,
                 trace_id=trace_id,
             )
 
         # Always log the complaint
-        log_complaint(
+        complaint_saved = log_complaint(
             user_id=user_id,
             message=message,
             complaint_type=complaint_type,
             emotion=emotion,
             severity=severity,
             privacy_mode=privacy_mode,
+            thread_id=thread_id,
             complaint_target=complaint_target,
             escalation_action=action,
             ticket_id=ticket_id,
@@ -105,6 +110,7 @@ def handle_escalation(state: HRState) -> dict:
             "metadata": {
                 **state.get("metadata", {}),
                 "ticket_id": ticket_id,
+                "complaint_persisted": bool(complaint_saved),
             },
         }
 

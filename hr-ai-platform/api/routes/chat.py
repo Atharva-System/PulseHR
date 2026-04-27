@@ -12,7 +12,8 @@ from db.connection import get_db_session
 from db.models import UserModel, ConversationModel, TicketModel, FeedbackModel
 from orchestrator.graph import build_graph
 from orchestrator.state import HRState
-from utils.helpers import generate_trace_id, get_timestamp
+from utils.context import contains_ticket_notice
+from utils.helpers import generate_id, generate_trace_id, get_timestamp
 from utils.logger import get_logger
 from utils.privacy import normalize_privacy_mode
 
@@ -108,6 +109,31 @@ def _load_ticket_context(user_id: str) -> dict:
         session.close()
 
 
+def _resolve_thread_id(user_id: str) -> str:
+    """Reuse an active complaint thread when the last complaint is still in intake."""
+    session = get_db_session()
+    try:
+        rows = (
+            session.query(ConversationModel)
+            .filter(ConversationModel.user_id == user_id)
+            .order_by(ConversationModel.timestamp.desc())
+            .limit(12)
+            .all()
+        )
+        for row in rows:
+            if (row.intent or "") != "employee_complaint":
+                continue
+            thread_id = getattr(row, "thread_id", "") or ""
+            if thread_id and not contains_ticket_notice(row.response or ""):
+                return thread_id
+            break
+    except Exception as e:
+        logger.warning(f"Could not resolve thread id: {e}")
+    finally:
+        session.close()
+    return generate_id("THR")
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -123,6 +149,7 @@ async def chat(
 
     trace_id = generate_trace_id()
     timestamp = get_timestamp()
+    thread_id = _resolve_thread_id(user_id)
 
     # Load recent conversation history from DB for context
     conversation_history = []
@@ -157,6 +184,7 @@ async def chat(
             "user_id": user_id,
             "message": request.message,
             "privacy_mode": normalize_privacy_mode(request.privacy_mode),
+            "thread_id": thread_id,
             "intent": "",
             "confidence": 0.0,
             "emotion": "",

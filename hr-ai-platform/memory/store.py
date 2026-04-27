@@ -17,9 +17,9 @@ logger = get_logger(__name__)
 class BaseMemoryStore(Protocol):
     """Protocol that any memory backend must implement."""
 
-    def save_conversation(self, entry: ConversationEntry) -> None: ...
+    def save_conversation(self, entry: ConversationEntry) -> bool: ...
     def get_conversation(self, user_id: str) -> list[ConversationEntry]: ...
-    def save_complaint(self, record: ComplaintRecord) -> None: ...
+    def save_complaint(self, record: ComplaintRecord) -> bool: ...
     def get_complaints_by_user(self, user_id: str) -> list[ComplaintRecord]: ...
 
 
@@ -34,20 +34,22 @@ class InMemoryStore:
         self._conversations: dict[str, list[ConversationEntry]] = {}
         self._complaints: dict[str, list[ComplaintRecord]] = {}
 
-    def save_conversation(self, entry: ConversationEntry) -> None:
+    def save_conversation(self, entry: ConversationEntry) -> bool:
         self._conversations.setdefault(entry.user_id, []).append(entry)
         logger.info(
             f"[{entry.trace_id}] Saved conversation (in-memory) for user {entry.user_id}"
         )
+        return True
 
     def get_conversation(self, user_id: str) -> list[ConversationEntry]:
         return self._conversations.get(user_id, [])
 
-    def save_complaint(self, record: ComplaintRecord) -> None:
+    def save_complaint(self, record: ComplaintRecord) -> bool:
         self._complaints.setdefault(record.user_id, []).append(record)
         logger.info(
             f"[{record.trace_id}] Saved complaint (in-memory) {record.complaint_id}"
         )
+        return True
 
     def get_complaints_by_user(self, user_id: str) -> list[ComplaintRecord]:
         return self._complaints.get(user_id, [])
@@ -75,7 +77,7 @@ class PostgresMemoryStore:
         Base.metadata.create_all(engine)
         logger.info("PostgreSQL memory store initialized — tables verified")
 
-    def save_conversation(self, entry: ConversationEntry) -> None:
+    def save_conversation(self, entry: ConversationEntry) -> bool:
         """Insert a conversation row into PostgreSQL."""
         from db.models import ConversationModel
 
@@ -91,6 +93,7 @@ class PostgresMemoryStore:
                     severity=entry.severity,
                     agent_used=entry.agent_used,
                     privacy_mode=entry.privacy_mode,
+                    thread_id=entry.thread_id,
                     trace_id=entry.trace_id,
                     timestamp=datetime.fromisoformat(entry.timestamp)
                     if entry.timestamp
@@ -102,8 +105,10 @@ class PostgresMemoryStore:
                 f"[{entry.trace_id}] Saved conversation (PG) for user "
                 f"{entry.user_id} (intent={entry.intent}, agent={entry.agent_used})"
             )
+            return True
         except Exception as e:
             logger.error(f"[{entry.trace_id}] Failed to save conversation to PG: {e}")
+            return False
 
     def get_conversation(self, user_id: str) -> list[ConversationEntry]:
         """Fetch all conversations for a user, ordered by timestamp."""
@@ -128,6 +133,7 @@ class PostgresMemoryStore:
                         severity=r.severity or "",
                         agent_used=r.agent_used or "",
                         privacy_mode=r.privacy_mode or "identified",
+                        thread_id=getattr(r, "thread_id", "") or "",
                         trace_id=r.trace_id or "",
                         timestamp=r.timestamp.isoformat() if r.timestamp else "",
                     )
@@ -137,7 +143,7 @@ class PostgresMemoryStore:
             logger.error(f"Failed to fetch conversations from PG for {user_id}: {e}")
             return []
 
-    def save_complaint(self, record: ComplaintRecord) -> None:
+    def save_complaint(self, record: ComplaintRecord) -> bool:
         """Insert a complaint row into PostgreSQL."""
         from db.models import ComplaintModel
 
@@ -151,6 +157,7 @@ class PostgresMemoryStore:
                     emotion=record.emotion,
                     severity=record.severity,
                     privacy_mode=record.privacy_mode,
+                    thread_id=record.thread_id,
                     complaint_target=record.complaint_target,
                     escalation_action=record.escalation_action,
                     ticket_id=record.ticket_id,
@@ -165,8 +172,10 @@ class PostgresMemoryStore:
                 f"[{record.trace_id}] Saved complaint (PG) {record.complaint_id} "
                 f"for user {record.user_id} (severity={record.severity})"
             )
+            return True
         except Exception as e:
             logger.error(f"[{record.trace_id}] Failed to save complaint to PG: {e}")
+            return False
 
     def get_complaints_by_user(self, user_id: str) -> list[ComplaintRecord]:
         """Fetch all complaints for a user, ordered by timestamp."""
@@ -189,6 +198,7 @@ class PostgresMemoryStore:
                         emotion=r.emotion or "",
                         severity=r.severity or "",
                         privacy_mode=r.privacy_mode or "identified",
+                        thread_id=getattr(r, "thread_id", "") or "",
                         complaint_target=getattr(r, "complaint_target", "") or "",
                         escalation_action=r.escalation_action or "",
                         ticket_id=r.ticket_id or "",

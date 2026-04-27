@@ -9,6 +9,7 @@ from app.dependencies import get_llm_for_agent, get_memory_store
 from agents.policy.tools import search_policies
 from memory.schemas import ConversationEntry
 from orchestrator.state import HRState
+from utils.context import build_compact_history
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -70,11 +71,11 @@ def respond_node(state: HRState) -> dict:
         )
 
         # Build conversation history string
-        history_parts = []
-        for entry in state.get("conversation_history", []):
-            history_parts.append(f"Employee: {entry.get('content', '')}")
-            history_parts.append(f"HR Assistant: {entry.get('content2', '')}")
-        history_str = "\n".join(history_parts) if history_parts else "(No prior conversation)"
+        history_str = build_compact_history(
+            state.get("conversation_history", []),
+            max_turns=3,
+            max_chars_per_message=220,
+        )
 
         prompt = POLICY_RESPONSE_PROMPT.format(
             message=state.get("message", ""),
@@ -93,12 +94,17 @@ def respond_node(state: HRState) -> dict:
             intent=state.get("intent", "policy_question"),
             agent_used="policy_agent",
             privacy_mode=state.get("privacy_mode", "identified"),
+            thread_id=state.get("thread_id", ""),
             trace_id=trace_id,
         )
-        store.save_conversation(entry)
+        saved = store.save_conversation(entry)
+        metadata = {
+            **state.get("metadata", {}),
+            "memory_persisted": bool(saved),
+        }
 
         logger.info(f"[{trace_id}] Policy agent response generated")
-        return {"response": response_text}
+        return {"response": response_text, "metadata": metadata}
 
     except Exception as e:
         logger.error(f"[{trace_id}] Error in policy/respond_node: {e}")

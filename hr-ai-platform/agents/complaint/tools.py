@@ -16,6 +16,7 @@ def create_hr_ticket(
     severity: str,
     message: str,
     privacy_mode: str = "identified",
+    thread_id: str = "",
     complaint_target: str = "",
     trace_id: str = "",
 ) -> str:
@@ -31,6 +32,7 @@ def create_hr_ticket(
         severity=severity,
         user_id=user_id,
         privacy_mode=privacy_mode,
+        thread_id=thread_id,
         complaint_target=complaint_target,
         trace_id=trace_id,
     )
@@ -65,11 +67,12 @@ def log_complaint(
     emotion: str,
     severity: str,
     privacy_mode: str = "identified",
+    thread_id: str = "",
     complaint_target: str = "",
     escalation_action: str = "",
     ticket_id: str = "",
     trace_id: str = "",
-) -> None:
+) -> bool:
     """Persist a complaint record to memory."""
     logger.info(f"[{trace_id}] Logging complaint for user {user_id}")
     store = get_memory_store()
@@ -80,12 +83,13 @@ def log_complaint(
         emotion=emotion,
         severity=severity,
         privacy_mode=privacy_mode,
+        thread_id=thread_id,
         complaint_target=complaint_target,
         escalation_action=escalation_action,
         ticket_id=ticket_id,
         trace_id=trace_id,
     )
-    store.save_complaint(record)
+    return store.save_complaint(record)
     log_event(
         "complaint_logged",
         {"user_id": user_id, "complaint_id": record.complaint_id},
