@@ -1,5 +1,5 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/layout/ProtectedRoute";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
@@ -18,6 +18,17 @@ import MessagesPage from "@/pages/hr/MessagesPage";
 import MyTicketsPage from "@/pages/user/MyTicketsPage";
 import ReviewsPage from "@/pages/hr/ReviewsPage";
 import ComplaintProfilesPage from "@/pages/hr/ComplaintProfilesPage";
+
+/** Redirects to the user's dashboard if already logged in, otherwise /login */
+function DefaultRedirect() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null; // wait for session restore
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "higher_authority")
+    return <Navigate to="/admin/dashboard" replace />;
+  if (user.role === "hr") return <Navigate to="/hr/dashboard" replace />;
+  return <Navigate to="/chat" replace />;
+}
 
 export default function App() {
   return (
@@ -98,7 +109,7 @@ export default function App() {
             </Route>
 
             {/* Default redirect */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<DefaultRedirect />} />
           </Routes>
         </HashRouter>
       </AuthProvider>

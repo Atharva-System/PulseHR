@@ -1,17 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import AnimatedLogo from "@/components/shared/AnimatedLogo";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // If already logged in, skip the login page
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.role === "higher_authority")
+        navigate("/admin/dashboard", { replace: true });
+      else if (user.role === "hr") navigate("/hr/dashboard", { replace: true });
+      else navigate("/chat", { replace: true });
+    }
+  }, [user, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

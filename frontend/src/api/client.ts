@@ -31,9 +31,12 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem("refresh_token");
       if (refreshToken) {
         try {
-          const { data } = await axios.post(resolveApiUrl("/api/auth/refresh"), {
-            refresh_token: refreshToken,
-          });
+          const { data } = await axios.post(
+            resolveApiUrl("/api/auth/refresh"),
+            {
+              refresh_token: refreshToken,
+            },
+          );
           localStorage.setItem("access_token", data.access_token);
           original.headers.Authorization = `Bearer ${data.access_token}`;
           return api(original);
@@ -41,10 +44,10 @@ api.interceptors.response.use(
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
           localStorage.removeItem("user");
-          window.location.href = "/login";
+          window.location.replace("/#/login");
         }
       } else {
-        window.location.href = "/login";
+        window.location.replace("/#/login");
       }
     }
     return Promise.reject(error);

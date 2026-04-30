@@ -23,15 +23,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session on mount
+  // Restore session on mount — verify token is still valid with the server
   useEffect(() => {
     const storedToken = localStorage.getItem("access_token");
     const storedUser = localStorage.getItem("user");
     if (storedToken && storedUser) {
+      // Optimistically restore state so protected routes don't flicker
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
+      // Then verify with server in background
+      authApi
+        .me()
+        .then(({ data }) => {
+          // Update user from server in case profile changed
+          localStorage.setItem("user", JSON.stringify(data));
+          setUser(data);
+        })
+        .catch(async () => {
+          // Access token invalid — try to refresh before giving up
+          const refreshToken = localStorage.getItem("refresh_token");
+          if (refreshToken) {
+            try {
+              const { data } = await authApi.refresh(refreshToken);
+              localStorage.setItem("access_token", data.access_token);
+              setToken(data.access_token);
+            } catch {
+              // Refresh also failed — force logout
+              localStorage.removeItem("access_token");
+              localStorage.removeItem("refresh_token");
+              localStorage.removeItem("user");
+              setToken(null);
+              setUser(null);
+            }
+          } else {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("user");
+            setToken(null);
+            setUser(null);
+          }
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   const login = async (username: string, password: string) => {
