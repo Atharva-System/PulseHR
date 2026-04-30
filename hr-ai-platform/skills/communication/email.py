@@ -47,7 +47,11 @@ def send_email(to: str, subject: str, body: str, html: bool = False) -> dict:
         else:
             msg.attach(MIMEText(body, "plain"))
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+        with smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout_seconds,
+        ) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg)

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # SMTP settings
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
+    smtp_timeout_seconds: int = 10
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "hr-platform@company.com"

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import require_hr, get_current_user
@@ -57,6 +57,7 @@ def _to_dict(m: MessageModel) -> dict:
 @router.post("", status_code=201)
 async def send_message(
     body: SendMessageRequest,
+    background_tasks: BackgroundTasks,
     current_user: UserModel = Depends(require_hr),
 ):
     """Send an internal message to another HR or authority user."""
@@ -93,14 +94,14 @@ async def send_message(
         session.commit()
         session.refresh(msg)
 
-        # Email notification to recipient
-        try:
-            if recipient.email:
-                from skills.communication.email import send_email
-                role_label = "Higher Authority" if current_user.role == "higher_authority" else "HR"
-                sender_name = current_user.full_name or current_user.username
-                sent_at = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
-                html_body = f"""
+        # Email notification to recipient (background task; do not block response path)
+        if recipient.email:
+            from skills.communication.email import send_email
+
+            role_label = "Higher Authority" if current_user.role == "higher_authority" else "HR"
+            sender_name = current_user.full_name or current_user.username
+            sent_at = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
+            html_body = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -140,14 +141,13 @@ async def send_message(
   </table>
 </body>
 </html>"""
-                send_email(
-                    to=recipient.email,
-                    subject=f"[Pulsee] New message from {current_user.username}",
-                    body=html_body,
-                    html=True,
-                )
-        except Exception as e:
-            logger.warning(f"Could not send email notification for message: {e}")
+            background_tasks.add_task(
+                send_email,
+                to=recipient.email,
+                subject=f"[Pulsee] New message from {current_user.username}",
+                body=html_body,
+                html=True,
+            )
 
         logger.info(
             f"Message sent: {current_user.username} → {recipient.username} (id={msg.id})"
