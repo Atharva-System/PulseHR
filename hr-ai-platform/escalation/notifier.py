@@ -135,10 +135,11 @@ def _build_html_email(complaint_summary: str, severity: str, ticket_id: str = ""
     color, bg = severity_colors.get(severity, ("#f97316", "#fff7ed"))
     now = datetime.now(timezone.utc).strftime("%B %d, %Y at %I:%M %p UTC")
     base_path = "admin" if role == "higher_authority" else "hr"
+    frontend_base = settings.frontend_url.rstrip("/")
     dashboard_url = (
-        f"{settings.frontend_url}/{base_path}/tickets/{ticket_id}"
+      f"{frontend_base}/#/{base_path}/tickets/{ticket_id}"
         if ticket_id
-        else f"{settings.frontend_url}/{base_path}/tickets"
+      else f"{frontend_base}/#/{base_path}/tickets"
     )
 
     return f"""
@@ -361,7 +362,7 @@ def notify_authority_hr_complaint(
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0;">
-                  <a href="{settings.frontend_url}/admin/tickets/{ticket_id if ticket_id else ''}" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#9b1c1c);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Admin Dashboard &rarr;</a>
+                  <a href="{settings.frontend_url.rstrip('/')}/#/admin/tickets/{ticket_id if ticket_id else ''}" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#9b1c1c);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Admin Dashboard &rarr;</a>
                 </td>
               </tr>
             </table>

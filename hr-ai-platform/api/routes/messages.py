@@ -126,7 +126,7 @@ async def send_message(
             </div>
             <br/>
             <p style="text-align:center;">
-              <a href="{settings.frontend_url}/{('admin' if current_user.role == 'higher_authority' else 'hr')}/messages" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
+                            <a href="{settings.frontend_url.rstrip('/')}/#/{('admin' if current_user.role == 'higher_authority' else 'hr')}/messages" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
             </p>
           </td>
         </tr>
