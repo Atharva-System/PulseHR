@@ -8,6 +8,7 @@ import {
   RefreshCw,
   CheckCheck,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { notificationsApi } from "@/api/services";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,6 +75,16 @@ export default function NotificationBell() {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     try {
       await notificationsApi.markAllRead();
+    } catch {
+      fetchNotifications();
+    }
+  };
+
+  const clearAll = async () => {
+    // Optimistic update
+    setNotifications([]);
+    try {
+      await notificationsApi.clearAll();
     } catch {
       fetchNotifications();
     }
@@ -152,6 +163,16 @@ export default function NotificationBell() {
                 >
                   <CheckCheck size={13} />
                   Mark all read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+                  title="Clear all notifications"
+                >
+                  <Trash2 size={13} />
+                  Clear all
                 </button>
               )}
               <button

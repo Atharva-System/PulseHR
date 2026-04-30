@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import require_hr, get_current_user
+from app.config import settings
 from db.connection import get_db_session
 from db.models import MessageModel, UserModel
 from utils.logger import get_logger
@@ -125,7 +126,7 @@ async def send_message(
             </div>
             <br/>
             <p style="text-align:center;">
-              <a href="#" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
+              <a href="{settings.frontend_url}/{('admin' if current_user.role == 'higher_authority' else 'hr')}/messages" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
             </p>
           </td>
         </tr>

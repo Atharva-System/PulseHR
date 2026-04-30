@@ -124,3 +124,19 @@ async def mark_all_notifications_read(
         return {"status": "ok"}
     finally:
         session.close()
+
+
+@router.delete("/clear-all")
+async def clear_all_notifications(
+    current_user: UserModel = Depends(require_hr),
+):
+    """Delete all notifications for this user."""
+    session = get_db_session()
+    try:
+        session.query(AppNotificationModel).filter(
+            AppNotificationModel.user_id == current_user.id,
+        ).delete()
+        session.commit()
+        return {"status": "ok"}
+    finally:
+        session.close()

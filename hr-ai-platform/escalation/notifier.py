@@ -123,7 +123,7 @@ def _notify_recipients(
     return {"status": "sent", "recipients": [r.email for r in recipients], "results": emails_sent}
 
 
-def _build_html_email(complaint_summary: str, severity: str) -> str:
+def _build_html_email(complaint_summary: str, severity: str, ticket_id: str = "", role: str = "hr") -> str:
     """Build a professional HTML email body."""
     severity_upper = severity.upper()
     severity_colors = {
@@ -134,6 +134,12 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
     }
     color, bg = severity_colors.get(severity, ("#f97316", "#fff7ed"))
     now = datetime.now(timezone.utc).strftime("%B %d, %Y at %I:%M %p UTC")
+    base_path = "admin" if role == "higher_authority" else "hr"
+    dashboard_url = (
+        f"{settings.frontend_url}/{base_path}/tickets/{ticket_id}"
+        if ticket_id
+        else f"{settings.frontend_url}/{base_path}/tickets"
+    )
 
     return f"""
 <!DOCTYPE html>
@@ -183,7 +189,7 @@ def _build_html_email(complaint_summary: str, severity: str) -> str:
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0;">
-                  <a href="#" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Dashboard →</a>
+                  <a href="{dashboard_url}" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Dashboard →</a>
                 </td>
               </tr>
             </table>
@@ -210,32 +216,39 @@ def notify_hr(complaint_summary: str, severity: str) -> dict:
     notification_levels include the given severity will be notified.
     """
     subject = f"⚠️ HR Alert — {severity.upper()} Severity Complaint Reported"
-    body = _build_html_email(complaint_summary, severity)
+    body_hr = _build_html_email(complaint_summary, severity, role="hr")
+    body_auth = _build_html_email(complaint_summary, severity, role="higher_authority")
 
     hr_recipients = _get_notification_recipients(role="hr", severity=severity)
     authority_recipients = _get_notification_recipients(role="higher_authority", severity=severity)
 
-    # Merge, deduplicate by user_id
-    seen = set()
-    recipients = []
-    for r in hr_recipients + authority_recipients:
-        if r.user_id not in seen:
-            seen.add(r.user_id)
-            recipients.append(r)
-
+    # Merge, deduplicate by user_id — send role-appropriate dashboard URL
     notif_type = "high_severity" if severity in ("critical", "high") else "new_ticket"
     notif_title = f"{'⚠️ Urgent: ' if severity in ('critical', 'high') else ''}New {severity.upper()} Complaint"
     notif_message = complaint_summary[:300]
 
-    return _notify_recipients(
-        recipients=recipients,
-        subject=subject,
-        body=body,
-        notif_type=notif_type,
-        notif_title=notif_title,
-        notif_message=notif_message,
-        severity=severity,
-    )
+    results = []
+    if hr_recipients:
+        results.append(_notify_recipients(
+            recipients=hr_recipients,
+            subject=subject,
+            body=body_hr,
+            notif_type=notif_type,
+            notif_title=notif_title,
+            notif_message=notif_message,
+            severity=severity,
+        ))
+    if authority_recipients:
+        results.append(_notify_recipients(
+            recipients=authority_recipients,
+            subject=subject,
+            body=body_auth,
+            notif_type=notif_type,
+            notif_title=notif_title,
+            notif_message=notif_message,
+            severity=severity,
+        ))
+    return results[0] if len(results) == 1 else {"status": "sent", "results": results}
 
 
 def notify_authority_hr_complaint(
@@ -348,7 +361,7 @@ def notify_authority_hr_complaint(
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0;">
-                  <a href="#" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#9b1c1c);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Admin Dashboard &rarr;</a>
+                  <a href="{settings.frontend_url}/admin/tickets/{ticket_id if ticket_id else ''}" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#9b1c1c);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Review in Admin Dashboard &rarr;</a>
                 </td>
               </tr>
             </table>
@@ -402,7 +415,7 @@ def notify_authority(complaint_summary: str, severity: str, ticket_id: str | Non
     whose notification_levels include this severity.
     """
     subject = f"🚨 ESCALATION — {severity.upper()} SLA Breach Requires Immediate Attention"
-    body = _build_html_email(complaint_summary, severity)
+    body = _build_html_email(complaint_summary, severity, ticket_id=ticket_id or "", role="higher_authority")
 
     recipients = _get_notification_recipients(role="higher_authority", severity=severity)
     if not recipients:

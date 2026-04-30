@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
+    # Frontend URL (used in email buttons)
+    frontend_url: str = ""
+
     # SMTP settings
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587

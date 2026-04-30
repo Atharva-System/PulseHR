@@ -117,6 +117,7 @@ export const notificationsApi = {
   get: () => api.get<NotificationsResponse>("/api/notifications"),
   markRead: (id: string) => api.patch(`/api/notifications/${id}/read`),
   markAllRead: () => api.patch("/api/notifications/read-all"),
+  clearAll: () => api.delete("/api/notifications/clear-all"),
 };
 
 // ── Agents ───────────────────────────────────────────────────────────────

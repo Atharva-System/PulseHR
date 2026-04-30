@@ -560,7 +560,7 @@ async def assign_ticket(
                 f"Reported by: {reporter_label}\n"
                 f"Assigned by: {current_user.full_name or current_user.username}"
             )
-            email_body = _build_html_email(assignment_summary, ticket.severity)
+            email_body = _build_html_email(assignment_summary, ticket.severity, ticket_id=ticket.ticket_id, role=assignee.role)
             send_email(
                 to=assignee.email,
                 subject=f"📋 Ticket Assigned to You — {ticket.ticket_id} ({ticket.severity.upper()})",
