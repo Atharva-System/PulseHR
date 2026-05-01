@@ -154,7 +154,7 @@ export interface ComplaintTargetReportItem {
 
 export interface NotificationItem {
   id: string;
-  type: "new_ticket" | "status_change" | "high_severity" | "escalation";
+  type: "new_ticket" | "status_change" | "high_severity" | "escalation" | "new_message";
   title: string;
   message: string;
   severity: string | null;
