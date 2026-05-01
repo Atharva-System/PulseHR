@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.auth import require_hr, get_current_user
 from app.config import settings
 from db.connection import get_db_session
-from db.models import MessageModel, UserModel
+from db.models import MessageModel, UserModel, AppNotificationModel
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -94,60 +94,17 @@ async def send_message(
         session.commit()
         session.refresh(msg)
 
-        # Email notification to recipient (background task; do not block response path)
-        if recipient.email:
-            from skills.communication.email import send_email
-
-            role_label = "Higher Authority" if current_user.role == "higher_authority" else "HR"
-            sender_name = current_user.full_name or current_user.username
-            sent_at = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
-            html_body = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;background:#f1f5f9;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-        <tr>
-          <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 32px;">
-            <span style="font-size:22px;font-weight:700;color:#ffffff;">📩 New Internal Message</span><br/>
-            <span style="font-size:13px;color:rgba(255,255,255,0.8);">Pulsee AI — Internal Messaging</span>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px;">
-            <p style="margin:0 0 4px;font-size:13px;color:#64748b;">From</p>
-            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#1e293b;">{sender_name} <span style="font-size:12px;color:#7c3aed;background:#ede9fe;padding:2px 8px;border-radius:12px;">{role_label}</span></p>
-            <p style="margin:0 0 4px;font-size:13px;color:#64748b;">Sent at</p>
-            <p style="margin:0 0 24px;font-size:14px;color:#1e293b;">{sent_at}</p>
-            <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Message</p>
-            <div style="background:#f8fafc;border-left:4px solid #4f46e5;border-radius:0 8px 8px 0;padding:16px 20px;">
-              <p style="margin:0;font-size:15px;color:#1e293b;line-height:1.6;white-space:pre-wrap;">{body.content}</p>
-            </div>
-            <br/>
-            <p style="text-align:center;">
-                            <a href="{settings.frontend_url.rstrip('/')}/#/{('admin' if current_user.role == 'higher_authority' else 'hr')}/messages" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-size:14px;font-weight:600;padding:12px 32px;border-radius:8px;text-decoration:none;">Open in Pulsee →</a>
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
-            <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">This is an automated notification from <strong>Pulsee AI</strong>.</p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
-            background_tasks.add_task(
-                send_email,
-                to=recipient.email,
-                subject=f"[Pulsee] New message from {current_user.username}",
-                body=html_body,
-                html=True,
-            )
+        # In-app notification to recipient
+        notif = AppNotificationModel(
+            id=str(uuid.uuid4()),
+            user_id=recipient.id,
+            type="new_message",
+            title=f"New message from {current_user.username}",
+            message=body.content[:100] + ("..." if len(body.content) > 100 else ""),
+            severity="low"
+        )
+        session.add(notif)
+        session.commit()
 
         logger.info(
             f"Message sent: {current_user.username} → {recipient.username} (id={msg.id})"

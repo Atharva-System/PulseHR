@@ -191,7 +191,7 @@ export default function MessagesPage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-input bg-white shadow-sm">
+    <div className="flex h-full overflow-hidden rounded-xl border border-input bg-white shadow-sm">
       {/* ── Left: Thread List ───────────────────────────────────── */}
       <div className="flex w-72 flex-col border-r border-input">
         {/* Header */}

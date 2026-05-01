@@ -9,6 +9,7 @@ import {
   CheckCheck,
   ShieldAlert,
   Trash2,
+  MessageSquare,
 } from "lucide-react";
 import { notificationsApi } from "@/api/services";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,6 +93,11 @@ export default function NotificationBell() {
 
   const handleClick = (n: NotificationItem) => {
     if (!n.is_read) markRead(n.id);
+    if (n.type === "new_message") {
+      navigate(`${basePath}/messages`);
+      setOpen(false);
+      return;
+    }
     if (n.ticket_id) {
       navigate(`${basePath}/tickets/${n.ticket_id}`);
       setOpen(false);
@@ -100,6 +106,12 @@ export default function NotificationBell() {
 
   const typeIcon = (type: string) => {
     switch (type) {
+      case "new_message":
+        return (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+            <MessageSquare size={14} className="text-indigo-600" />
+          </div>
+        );
       case "high_severity":
         return (
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
