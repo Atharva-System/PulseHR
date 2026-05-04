@@ -156,7 +156,7 @@ def _build_html_email(complaint_summary: str, severity: str, ticket_id: str = ""
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td>
-                  <span style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">⚠️ HR Alert</span>
+                  <span style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">⚠️ Alert</span>
                   <br/>
                   <span style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;display:inline-block;">Pulsee AI — Automated Notification</span>
                 </td>
@@ -216,7 +216,7 @@ def notify_hr(complaint_summary: str, severity: str) -> dict:
     Recipients come from the DB. Both HR and higher_authority users whose
     notification_levels include the given severity will be notified.
     """
-    subject = f"⚠️ HR Alert — {severity.upper()} Severity Complaint Reported"
+    subject = f"⚠️ Alert — {severity.upper()} Severity Complaint Reported"
     body_hr = _build_html_email(complaint_summary, severity, role="hr")
     body_auth = _build_html_email(complaint_summary, severity, role="higher_authority")
 
